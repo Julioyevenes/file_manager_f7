@@ -1,0 +1,25 @@
+Preprocessor(defines):	STM32F769xx
+			USE_HAL_DRIVER
+			LV_CONF_INCLUDE_SIMPLE
+			LCD_COLOR_DEPTH=16
+			SUPPORT_WAV
+			SUPPORT_MP3
+			SUPPORT_JMV
+			SUPPORT_FLAC
+
+Exclusion(files):	Libraries/STM32F7xx_HAL_Driver/src/stm32f7xx_hal_msp_template.c
+		  	Libraries/STM32F7xx_HAL_Driver/src/stm32f7xx_hal_timebase_rtc_alarm_template.c
+		  	Libraries/STM32F7xx_HAL_Driver/src/stm32f7xx_hal_timebase_rtc_wakeup_template.c
+		  	Libraries/STM32F7xx_HAL_Driver/src/stm32f7xx_hal_timebase_tim_template.c
+			Libraries/lvgl/lv_conf_template.h
+			Libraries/FatFs/src/ffconf_template.h
+
+Include(directories):	/STM32Cube_FW_F7_V1.6.0/Drivers/CMSIS/Include
+			/STM32Cube_FW_F7_V1.6.0/Drivers/CMSIS/Device/ST/STM32F7xx/Include
+			/STM32Cube_FW_F7_V1.6.0/Drivers/STM32F7xx_HAL_Driver/Inc
+			/file_manager_f7/Inc
+			/file_manager_f7/Libraries
+			/file_manager_f7/Libraries/Components
+			/file_manager_f7/Libraries/STM32F769I-Discovery
+			/file_manager_f7/Libraries/FatFs/src
+			/file_manager_f7/Libraries/FatFs/src/drivers	
