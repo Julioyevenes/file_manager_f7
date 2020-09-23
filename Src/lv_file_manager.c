@@ -325,7 +325,9 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 					tobj->format == mp3 || \
 					tobj->format == flac)
 			{
-				if (player_h == NULL)
+				if (list_options == NULL && \
+					player_h == NULL && \
+					h == NULL)
 				{
 					fm_task_data.fr = f_open (&(fm_task_data.src), tobj->name, FA_READ);
 					if (fm_task_data.fr == FR_OK)
@@ -348,7 +350,8 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 
 		tobj = &fm_obj[i];
 		if (list_options == NULL && \
-			player_h == NULL)
+			player_h == NULL && \
+			h == NULL)
 		{
 			fm_obj_save = fm_obj[i];
 			if(tobj->volume == 1 && \
