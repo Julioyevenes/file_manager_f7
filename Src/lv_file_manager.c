@@ -26,6 +26,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "lv_file_manager.h"
+#include "lv_file_player.h"
 #include "ff_gen_drv.h"
 #include "sd_diskio_dma.h"
 #include <stdlib.h>
@@ -115,11 +116,7 @@ typedef struct
 
 	uint32_t 		buffer_size;
 	uint32_t 		count;
-	uint32_t 		total;	
-
-	lv_obj_t * 		parent;
-	lv_obj_t * 		cont;
-	lv_obj_t * 		widget;
+	uint32_t 		total;
 
 	lv_fm_obj_t *	obj;
 	lv_fm_stages_t	stage;
@@ -248,12 +245,9 @@ static void lv_fm_local_tab_create(lv_obj_t * parent)
     lv_coord_t grid_h = lv_page_get_height_grid(parent, 1, 1);
     lv_coord_t grid_w = lv_page_get_width_grid(parent, 1, 1);
 
-    lv_page_set_scrl_layout(parent, LV_LAYOUT_GRID);
+    lv_page_set_scrl_layout(parent, LV_LAYOUT_PRETTY_TOP);
 
 	fm_task_data.buffer_size = 512 * 1;
-	fm_task_data.parent = t1;
-	fm_task_data.cont = h;
-	fm_task_data.widget = bar;
 	fm_task_data.obj = &fm_obj_save;
 	
     list_local = lv_fm_list_create(parent, grid_w, grid_h, LV_ALIGN_CENTER, NULL, NULL);
@@ -327,6 +321,21 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 					lv_fm_list_fill(&fm_media[0], &fm_obj[0], list_local, lv_fm_list_local_btn_event_cb, 0);
 				}
 			}
+			else if(tobj->format == wav || \
+					tobj->format == mp3 || \
+					tobj->format == flac)
+			{
+				if (player_h == NULL)
+				{
+					fm_task_data.fr = f_open (&(fm_task_data.src), tobj->name, FA_READ);
+					if (fm_task_data.fr == FR_OK)
+					{
+						fm_task_data.err = (lv_fm_err_t) lv_fm_player_start(t1,
+																			(lv_fm_player_format_t) tobj->format,
+																			&(fm_task_data.src));
+					}
+				}
+			}
 		}
 
 		e_last = _LV_EVENT_LAST;
@@ -338,7 +347,8 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 		i = lv_list_get_btn_index(list_local, btn);
 
 		tobj = &fm_obj[i];
-		if (list_options == NULL)
+		if (list_options == NULL && \
+			player_h == NULL)
 		{
 			fm_obj_save = fm_obj[i];
 			if(tobj->volume == 1 && \
@@ -480,7 +490,7 @@ static void lv_fm_copying_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 		fm_task_data.flag_cut = 0;
 		fm_task_data.total = fm_task_data.count = 0;
 
-		LV_FM_OBJ_DEL(fm_task_data.cont)
+		LV_FM_OBJ_DEL(h)
 
 		lv_fm_list_fill(&fm_media[0], &fm_obj[0], list_local, lv_fm_list_local_btn_event_cb, 0);
 	}
@@ -892,22 +902,22 @@ static lv_fm_err_t lv_fm_file_copy(lv_fm_task_data_t * data)
 		return data->err;
 	}
 
-	data->cont = lv_cont_create(data->parent, NULL);
-	lv_cont_set_layout(data->cont, LV_LAYOUT_PRETTY_MID);
-	lv_cont_set_fit2(data->cont, LV_FIT_NONE, LV_FIT_TIGHT);
-	lv_obj_set_width(data->cont, lv_page_get_width_grid(data->parent, 1, 1));
+	h = lv_cont_create(t1, NULL);
+	lv_cont_set_layout(h, LV_LAYOUT_PRETTY_MID);
+	lv_cont_set_fit2(h, LV_FIT_NONE, LV_FIT_TIGHT);
+	lv_obj_set_width(h, lv_page_get_width_grid(t1, 1, 1));
 
-	data->widget = lv_bar_create(data->cont, NULL);
-	lv_obj_set_width(data->widget, lv_obj_get_width_fit(data->cont));
+	bar = lv_bar_create(h, NULL);
+	lv_obj_set_width(bar, lv_obj_get_width_fit(h));
 
-	lv_obj_t * btn = lv_btn_create(data->cont, NULL);
+	lv_obj_t * btn = lv_btn_create(h, NULL);
 	lv_obj_t * label = lv_label_create(btn, NULL);
 	lv_label_set_text(label ,"Cancel");
 	lv_btn_set_fit2(btn, LV_FIT_TIGHT, LV_FIT_TIGHT);
-	lv_obj_set_width(btn, lv_obj_get_width_fit(data->cont));
+	lv_obj_set_width(btn, lv_obj_get_width_fit(h));
 	lv_obj_set_event_cb(btn, lv_fm_copying_btn_event_cb);
 
-	lv_obj_align(data->cont, NULL, LV_ALIGN_CENTER, 0, 0);
+	lv_obj_align(h, NULL, LV_ALIGN_CENTER, 0, 0);
 
 	file_task = lv_task_create(lv_fm_file_task, 1, LV_TASK_PRIO_MID, data);
 	bar_task = lv_task_create(lv_fm_bar_task, 100, LV_TASK_PRIO_MID, data);
@@ -1124,7 +1134,7 @@ static void lv_fm_file_task_kill(lv_fm_task_data_t * data, lv_fm_err_t err)
 
 	LV_FM_FREE(data->buffer)
 
-	LV_FM_OBJ_DEL(data->cont)
+	LV_FM_OBJ_DEL(h)
 
 	LV_FM_TASK_DEL(bar_task)
 	LV_FM_TASK_DEL(file_task)
@@ -1268,10 +1278,10 @@ void lv_fm_bar_task(lv_task_t * task)
 	uint32_t t = (uint32_t) data->total;
 
 	lv_snprintf(buf, sizeof(buf), "Copying %d  /  %d  KB     %d  /  %d", value, total, n, t);
-	lv_obj_set_style_local_value_str(data->widget, LV_BAR_PART_BG, LV_STATE_DEFAULT, buf);
+	lv_obj_set_style_local_value_str(bar, LV_BAR_PART_BG, LV_STATE_DEFAULT, buf);
 
 	int16_t x = (int16_t) ((value * 100) / total);
-	lv_bar_set_value(data->widget, x, LV_ANIM_OFF);
+	lv_bar_set_value(bar, x, LV_ANIM_OFF);
 }
 
 void lv_fm_mbox_task(lv_task_t * task)

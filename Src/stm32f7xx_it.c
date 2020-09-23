@@ -54,6 +54,7 @@
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 extern SD_HandleTypeDef uSdHandle;
+extern SAI_HandleTypeDef haudio_out_sai;
 
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
@@ -199,6 +200,16 @@ void BSP_SDMMC_DMA_Tx_IRQHandler(void)
 void BSP_SDMMC_IRQHandler(void)
 {
   HAL_SD_IRQHandler(&uSdHandle);
+}
+
+/**
+  * @brief This function handles DMA2 Stream 4 interrupt request.
+  * @param None
+  * @retval None
+  */
+void AUDIO_OUT_SAIx_DMAx_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(haudio_out_sai.hdmatx);
 }
 
 
