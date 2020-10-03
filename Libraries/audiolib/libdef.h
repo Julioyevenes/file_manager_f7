@@ -74,7 +74,14 @@ typedef enum
 
 typedef struct
 {
-	uint8_t 					*pbuff;
+	uint32_t 					elapsed_time;
+	uint32_t 					total_time;
+} audio_lib_time_t;
+
+typedef struct
+{
+	uint8_t 					empty : 1;
+	uint8_t *					ptr;
 
 	uint32_t					size;
 	
@@ -86,13 +93,14 @@ typedef struct
 	uint8_t 					active : 1;
 	uint8_t 					volume;
 	
-	void *						data;	
+	void *						prv_data;
 	
 	FIL * 						fp;
 
 	audio_lib_err_t				err;
-	audio_lib_buffer_t			buffer;
+	audio_lib_buffer_t *		buffer;
 	audio_lib_playback_state_t 	playback_state;
+	audio_lib_time_t			time;
 } audio_lib_handle_t;
 
 typedef struct

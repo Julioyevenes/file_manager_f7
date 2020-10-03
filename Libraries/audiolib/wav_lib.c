@@ -30,7 +30,8 @@
 #include "stm32f769i_discovery_audio.h"
 
 /* Private types -------------------------------------------------------------*/
-typedef struct {
+typedef struct
+{
 	uint32_t ChunkID;       /* 0 */
 	uint32_t FileSize;      /* 4 */
 	uint32_t FileFormat;    /* 8 */
@@ -50,7 +51,8 @@ typedef struct {
 /* Private constants ---------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-wav_lib_info_t info;
+audio_lib_buffer_t wav_buffer;
+wav_lib_info_t wav_info;
 
 /* Private function prototypes -----------------------------------------------*/
 void wav_lib_start(audio_lib_handle_t * hlib);
@@ -72,25 +74,25 @@ void wav_lib_start(audio_lib_handle_t * hlib)
 {
 	uint32_t bytesread;
 
-	hlib->buffer.size = 8192;
-	hlib->buffer.pbuff = (uint8_t *) malloc(hlib->buffer.size);
-	if(!hlib->buffer.pbuff)
+	hlib->prv_data = &wav_info;
+	hlib->buffer = &wav_buffer;
+	hlib->buffer->size = 8192;
+	hlib->buffer->ptr = (uint8_t *) malloc(hlib->buffer->size);
+	if(!hlib->buffer->ptr)
 	{
 		hlib->err = AUDIO_LIB_MEMORY_ERROR;
 		return;
 	}
 	
-	if( f_read (hlib->fp, &info, sizeof(info), (UINT *) &bytesread) == FR_OK )
-	{
-		hlib->data = &(info.ByteRate);
-	}
-	else
+	if( f_read (hlib->fp, &wav_info, sizeof(wav_info), (UINT *) &bytesread) != FR_OK )
 	{
 		hlib->err = AUDIO_LIB_READ_ERROR;
 		return;
 	}
 	
-	if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_BOTH, hlib->volume, info.SampleRate) == 0)
+	hlib->time.total_time = hlib->fp->fsize / wav_info.ByteRate;
+
+	if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_BOTH, hlib->volume, wav_info.SampleRate) == 0)
 	{
 		BSP_AUDIO_OUT_SetAudioFrameSlot(CODEC_AUDIOFRAME_SLOT_02);
 	}
@@ -100,17 +102,17 @@ void wav_lib_start(audio_lib_handle_t * hlib)
 		return;
 	}	
 
-	hlib->buffer.state = AUDIO_LIB_BUFFER_OFFSET_NONE;
+	hlib->buffer->state = AUDIO_LIB_BUFFER_OFFSET_NONE;
 
-	f_read (hlib->fp, hlib->buffer.pbuff, hlib->buffer.size, (UINT *) &bytesread);
-	if(bytesread != hlib->buffer.size)
+	f_read (hlib->fp, hlib->buffer->ptr, hlib->buffer->size, (UINT *) &bytesread);
+	if(bytesread != hlib->buffer->size)
 	{
 		hlib->err = AUDIO_LIB_READ_ERROR;
 		return;
 	}
 
 	hlib->playback_state = AUDIO_LIB_STATE_PLAY;
-	BSP_AUDIO_OUT_Play((uint16_t *) hlib->buffer.pbuff, hlib->buffer.size);
+	BSP_AUDIO_OUT_Play((uint16_t *) hlib->buffer->ptr, hlib->buffer->size);
 	
 	hlib->err = AUDIO_LIB_NO_ERROR;
 	return;
@@ -119,13 +121,14 @@ void wav_lib_start(audio_lib_handle_t * hlib)
 void wav_lib_process(audio_lib_handle_t * hlib)
 {
 	uint32_t bytesread;
+	wav_lib_info_t * info = hlib->prv_data;
 
 	switch(hlib->playback_state)
   	{
 		case AUDIO_LIB_STATE_PLAY:
-			if(hlib->buffer.state == AUDIO_LIB_BUFFER_OFFSET_HALF)
+			if(hlib->buffer->state == AUDIO_LIB_BUFFER_OFFSET_HALF)
 			{
-				f_read (hlib->fp, hlib->buffer.pbuff, hlib->buffer.size / 2, (UINT *) &bytesread);
+				f_read (hlib->fp, hlib->buffer->ptr, hlib->buffer->size / 2, (UINT *) &bytesread);
 				if(!bytesread)
 				{ 
 					if(hlib->fp->fptr != hlib->fp->fsize)
@@ -139,12 +142,12 @@ void wav_lib_process(audio_lib_handle_t * hlib)
 						hlib->playback_state = AUDIO_LIB_STATE_STOP;
 					}
 				} 
-				hlib->buffer.state = AUDIO_LIB_BUFFER_OFFSET_NONE;
+				hlib->buffer->state = AUDIO_LIB_BUFFER_OFFSET_NONE;
 			}
 
-			if(hlib->buffer.state == AUDIO_LIB_BUFFER_OFFSET_FULL)
+			if(hlib->buffer->state == AUDIO_LIB_BUFFER_OFFSET_FULL)
 			{
-				f_read (hlib->fp, hlib->buffer.pbuff + (hlib->buffer.size / 2), hlib->buffer.size / 2, (UINT *) &bytesread);
+				f_read (hlib->fp, hlib->buffer->ptr + (hlib->buffer->size / 2), hlib->buffer->size / 2, (UINT *) &bytesread);
 				if(!bytesread)
 				{ 
 					if(hlib->fp->fptr != hlib->fp->fsize)
@@ -158,8 +161,10 @@ void wav_lib_process(audio_lib_handle_t * hlib)
 						hlib->playback_state = AUDIO_LIB_STATE_STOP;
 					}
 				} 
-				hlib->buffer.state = AUDIO_LIB_BUFFER_OFFSET_NONE;
+				hlib->buffer->state = AUDIO_LIB_BUFFER_OFFSET_NONE;
 			}
+
+			hlib->time.elapsed_time = hlib->fp->fptr / info->ByteRate;
 			break;
 
 		case AUDIO_LIB_STATE_STOP:
@@ -190,15 +195,15 @@ void wav_lib_process(audio_lib_handle_t * hlib)
 
 void wav_lib_free(audio_lib_handle_t * hlib)
 {
-	free(hlib->buffer.pbuff);
-	hlib->buffer.pbuff = NULL;
+	free(hlib->buffer->ptr);
+	hlib->buffer->ptr = NULL;
 }
 
 void wav_lib_transfer_complete_cb(audio_lib_handle_t * hlib)
 {
 	if(hlib->playback_state == AUDIO_LIB_STATE_PLAY)
 	{
-		hlib->buffer.state = AUDIO_LIB_BUFFER_OFFSET_FULL;
+		hlib->buffer->state = AUDIO_LIB_BUFFER_OFFSET_FULL;
 	}	
 }
 
@@ -206,6 +211,6 @@ void wav_lib_transfer_half_cb(audio_lib_handle_t * hlib)
 {
 	if(hlib->playback_state == AUDIO_LIB_STATE_PLAY)
 	{
-		hlib->buffer.state = AUDIO_LIB_BUFFER_OFFSET_HALF;
+		hlib->buffer->state = AUDIO_LIB_BUFFER_OFFSET_HALF;
 	}	
 }

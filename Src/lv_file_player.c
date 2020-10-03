@@ -28,6 +28,7 @@
 #include "lv_file_player.h"
 
 #include "wav_lib.h"
+#include "mp3_lib.h"
 
 /* Private types -------------------------------------------------------------*/
 /* Private constants ---------------------------------------------------------*/
@@ -84,6 +85,10 @@ audio_lib_err_t lv_fm_player_start(lv_obj_t * parent, lv_fm_player_format_t form
 	{
 		case player_wav:
 			audio_lib = &wav_lib;
+			break;
+
+		case player_mp3:
+			audio_lib = &mp3_lib;
 			break;
 
 		default:
@@ -219,9 +224,8 @@ void lv_fm_player_bar_task(lv_task_t * task)
 {
 	static char buf[64];
 	audio_lib_handle_t * hlib = task->user_data;
-	uint32_t byte_rate = *((uint32_t *) hlib->data);
-	uint32_t elapsed_time = (uint32_t) hlib->fp->fptr / byte_rate;
-	uint32_t total_time = (uint32_t) hlib->fp->fsize / byte_rate;
+	uint32_t elapsed_time = (uint32_t) hlib->time.elapsed_time;
+	uint32_t total_time = (uint32_t) hlib->time.total_time;
 	
 	lv_snprintf(buf, sizeof(buf), "%02d:%02d", elapsed_time / 60, elapsed_time % 60);
 	lv_obj_set_style_local_value_str(player_bar, LV_BAR_PART_BG, LV_STATE_DEFAULT, buf);
