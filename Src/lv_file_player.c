@@ -29,6 +29,7 @@
 
 #include "wav_lib.h"
 #include "mp3_lib.h"
+#include "flac_lib.h"
 
 /* Private types -------------------------------------------------------------*/
 /* Private constants ---------------------------------------------------------*/
@@ -89,6 +90,10 @@ audio_lib_err_t lv_fm_player_start(lv_obj_t * parent, lv_fm_player_format_t form
 
 		case player_mp3:
 			audio_lib = &mp3_lib;
+			break;
+
+		case player_flac:
+			audio_lib = &flac_lib;
 			break;
 
 		default:

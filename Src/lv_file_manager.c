@@ -764,22 +764,14 @@ static lv_fm_format_t lv_fm_get_ext(FILINFO *finfo)
 		Ext = jpeg;
 	else if(strstr(finfo->fname, ".gif") || strstr(finfo->fname, ".GIF"))
 		Ext = gif;
-#ifdef SUPPORT_WAV
 	else if(strstr(finfo->fname, ".wav") || strstr(finfo->fname, ".WAV"))
 		Ext = wav;
-#endif /* SUPPORT_WAV */
-#ifdef SUPPORT_MP3
 	else if(strstr(finfo->fname, ".mp3") || strstr(finfo->fname, ".MP3"))
 		Ext = mp3;
-#endif /* SUPPORT_MP3 */
-#ifdef SUPPORT_JMV
 	else if(strstr(finfo->fname, ".jmv") || strstr(finfo->fname, ".JMV"))
 		Ext = jmv;
-#endif /* SUPPORT_JMV */
-#ifdef SUPPORT_FLAC
 	else if(strstr(finfo->fname, ".fla") || strstr(finfo->fname, ".FLA"))
 		Ext = flac;
-#endif /* SUPPORT_FLAC */
 	else if(strstr(finfo->fname, ".bin") || strstr(finfo->fname, ".BIN"))
 		Ext = bin;
 	else
