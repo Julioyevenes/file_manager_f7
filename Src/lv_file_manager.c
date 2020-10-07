@@ -893,8 +893,7 @@ static lv_fm_err_t lv_fm_file_copy(lv_fm_task_data_t * data)
 	data->buffer = (uint8_t *) malloc(data->buffer_size);
 	if(!data->buffer)
 	{
-		data->err = LV_FM_MEMORY_ERROR;
-		return data->err;
+		return LV_FM_MEMORY_ERROR;
 	}
 
 	h = lv_cont_create(t1, NULL);
@@ -917,7 +916,7 @@ static lv_fm_err_t lv_fm_file_copy(lv_fm_task_data_t * data)
 	file_task = lv_task_create(lv_fm_file_task, 1, LV_TASK_PRIO_MID, data);
 	bar_task = lv_task_create(lv_fm_bar_task, 100, LV_TASK_PRIO_MID, data);
 
-	return data->err;
+	return LV_FM_NO_ERROR;
 }
 
 static lv_fm_err_t lv_fm_folder_scan(lv_fm_task_data_t * data, const char * src_path, const char * dst_path, const char * name)
