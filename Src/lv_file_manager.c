@@ -27,6 +27,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "lv_file_manager.h"
 #include "lv_file_player.h"
+#include "lv_file_loader.h"
 #include "ff_gen_drv.h"
 #include "sd_diskio_dma.h"
 #include <stdlib.h>
@@ -327,6 +328,7 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 			{
 				if (list_options == NULL && \
 					player_h == NULL && \
+					loader_h == NULL && \
 					h == NULL)
 				{
 					fm_task_data.fr = f_open (&(fm_task_data.src), tobj->name, FA_READ);
@@ -335,6 +337,20 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 						fm_task_data.err = (lv_fm_err_t) lv_fm_player_start(t1,
 																			(lv_fm_player_format_t) tobj->format,
 																			&(fm_task_data.src));
+					}
+				}
+			}
+			else if(tobj->format == bin)
+			{
+				if (list_options == NULL && \
+					player_h == NULL && \
+					loader_h == NULL && \
+					h == NULL)
+				{
+					fm_task_data.fr = f_open (&(fm_task_data.src), tobj->name, FA_READ);
+					if (fm_task_data.fr == FR_OK)
+					{
+						fm_task_data.err = (lv_fm_err_t) lv_fm_loader_init(t1, &(fm_task_data.src));
 					}
 				}
 			}
@@ -351,6 +367,7 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 		tobj = &fm_obj[i];
 		if (list_options == NULL && \
 			player_h == NULL && \
+			loader_h == NULL && \
 			h == NULL)
 		{
 			fm_obj_save = fm_obj[i];
