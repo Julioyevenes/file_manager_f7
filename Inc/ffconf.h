@@ -17,10 +17,10 @@
 #include "stm32f769i_discovery_sd.h"
 
 /* If USB Host MSC is used, then need to include the USBH and UBSH MSC core header files */
-/* #include "usbh_core.h" */
-/* #include "usbh_msc.h" */
+#include "usbh_core.h"
+#include "usbh_msc.h"
 /* hUSBH to be updated with the USBH handle defined in the application code */
-/* #define  HOST_HANDLE   hUSBH */
+#define  HOST_HANDLE   hUSBH
 
 /*---------------------------------------------------------------------------/
 / Functions and Buffer Configurations

@@ -65,6 +65,7 @@ void BSP_SDMMC_DMA_Rx_IRQHandler(void);
 void BSP_SDMMC_DMA_Tx_IRQHandler(void);
 void BSP_SDMMC_IRQHandler(void);
 void AUDIO_OUT_SAIx_DMAx_IRQHandler(void);
+void OTG_HS_IRQHandler(void);
 
 #ifdef __cplusplus
 }

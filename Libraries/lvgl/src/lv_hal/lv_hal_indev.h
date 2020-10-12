@@ -47,7 +47,13 @@ enum {
 typedef uint8_t lv_indev_type_t;
 
 /** States for input devices*/
-enum { LV_INDEV_STATE_REL = 0, LV_INDEV_STATE_PR };
+enum {
+	LV_INDEV_STATE_IDLE = 0,
+	LV_INDEV_STATE_REL,
+	LV_INDEV_STATE_PR,
+	LV_INDEV_STATE_RIGHT_REL,
+	LV_INDEV_STATE_RIGHT_PR
+};
 typedef uint8_t lv_indev_state_t;
 
 

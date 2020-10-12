@@ -37,7 +37,7 @@ static void indev_keypad_proc(lv_indev_t * i, lv_indev_data_t * data);
 static void indev_encoder_proc(lv_indev_t * i, lv_indev_data_t * data);
 static void indev_button_proc(lv_indev_t * i, lv_indev_data_t * data);
 static void indev_proc_press(lv_indev_proc_t * proc);
-static void indev_proc_release(lv_indev_proc_t * proc);
+static void indev_proc_release(lv_indev_proc_t * proc, bool right_click);
 static void indev_proc_reset_query_handler(lv_indev_t * indev);
 static void indev_click_focus(lv_indev_proc_t * proc);
 static void indev_drag(lv_indev_proc_t * proc);
@@ -410,11 +410,15 @@ static void indev_pointer_proc(lv_indev_t * i, lv_indev_data_t * data)
     i->proc.types.pointer.act_point.x = data->point.x;
     i->proc.types.pointer.act_point.y = data->point.y;
 
-    if(i->proc.state == LV_INDEV_STATE_PR) {
+    if(i->proc.state == LV_INDEV_STATE_PR || \
+       i->proc.state == LV_INDEV_STATE_RIGHT_PR) {
         indev_proc_press(&i->proc);
     }
-    else {
-        indev_proc_release(&i->proc);
+    else if(i->proc.state == LV_INDEV_STATE_REL) {
+        indev_proc_release(&i->proc, false);
+    }
+    else if(i->proc.state == LV_INDEV_STATE_RIGHT_REL) {
+        indev_proc_release(&i->proc, true);
     }
 
     i->proc.types.pointer.last_point.x = i->proc.types.pointer.act_point.x;
@@ -817,7 +821,7 @@ static void indev_button_proc(lv_indev_t * i, lv_indev_data_t * data)
     }
     else {
         /*If a new point comes always make a release*/
-        indev_proc_release(&i->proc);
+        indev_proc_release(&i->proc, false);
     }
 
     i->proc.types.pointer.last_point.x = i->proc.types.pointer.act_point.x;
@@ -1003,7 +1007,7 @@ static void indev_proc_press(lv_indev_proc_t * proc)
  * Process the released state of LV_INDEV_TYPE_POINER input devices
  * @param proc pointer to an input device 'proc'
  */
-static void indev_proc_release(lv_indev_proc_t * proc)
+static void indev_proc_release(lv_indev_proc_t * proc, bool right_click)
 {
     if(proc->wait_until_release != 0) {
         proc->types.pointer.act_obj  = NULL;
@@ -1031,7 +1035,11 @@ static void indev_proc_release(lv_indev_proc_t * proc)
                     if(indev_reset_check(proc)) return;
                 }
 
-                lv_event_send(indev_obj_act, LV_EVENT_CLICKED, NULL);
+                if(right_click) {
+                	lv_event_send(indev_obj_act, LV_EVENT_RIGHT_CLICKED, NULL);
+                } else {
+                	lv_event_send(indev_obj_act, LV_EVENT_CLICKED, NULL);
+                }
                 if(indev_reset_check(proc)) return;
             }
 
@@ -1050,7 +1058,11 @@ static void indev_proc_release(lv_indev_proc_t * proc)
             }
 
             if(proc->types.pointer.drag_in_prog == 0) {
-                lv_event_send(indev_obj_act, LV_EVENT_CLICKED, NULL);
+                if(right_click) {
+                	lv_event_send(indev_obj_act, LV_EVENT_RIGHT_CLICKED, NULL);
+                } else {
+                	lv_event_send(indev_obj_act, LV_EVENT_CLICKED, NULL);
+                }
                 if(indev_reset_check(proc)) return;
             }
 

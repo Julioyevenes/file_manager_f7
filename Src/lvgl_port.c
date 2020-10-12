@@ -30,6 +30,9 @@
 #include "stm32f769i_discovery_lcd.h"
 #include "stm32f769i_discovery_ts.h"
 
+#include "usbh_core.h"
+#include "usbh_hid.h"
+
 /* Private types ------------------------------------------------------------*/
 /* Private constants --------------------------------------------------------*/
 /* DMA Stream parameters definitions. You can modify these parameters to select
@@ -57,9 +60,17 @@ static volatile int32_t 			y2_flush;
 static volatile int32_t 			y_flush_act;
 static volatile const lv_color_t 	*buf_to_flush;
 
+uint8_t husb_state;
+USBH_HandleTypeDef hUSBH;
+HID_MOUSE_Info_TypeDef * m_pinfo;
+
+lv_indev_t * enc_indev;
+
 /* Private function prototypes ----------------------------------------------*/
 static void lvgl_disp_write_cb(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* color_p);
 static bool lvgl_ts_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
+static bool lvgl_mouse_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
+static bool lvgl_encoder_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
 static void DMA_Config(void);
 static void DMA_TransferComplete(DMA_HandleTypeDef *han);
 static void DMA_TransferError(DMA_HandleTypeDef *han);
@@ -103,18 +114,50 @@ void lvgl_disp_init(void)
 
 void lvgl_indev_init(void)
 {
+    lv_indev_drv_t indev_drv;
+    lv_indev_t * indev_ptr;
+
     /** 
       * Touchpad
       */
-	/* Initialize your touchpad if you have */
-	BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
+    /* Initialize your touchpad if you have */
+    if(BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == TS_OK)
+    {
+        /* Register a touchpad input device */
+        lv_indev_drv_init(&indev_drv);
+        indev_drv.type = LV_INDEV_TYPE_POINTER;
+        indev_drv.read_cb = lvgl_ts_read_cb;
+        lv_indev_drv_register(&indev_drv);
+    }
 
-    /* Register a touchpad input device */
-	lv_indev_drv_t indev_drv;
+    /**
+      * Mouse
+      */
+    /* Initialize your mouse if you have */
+    /* Nothing to do here */
+
+    /* Register a mouse input device */
     lv_indev_drv_init(&indev_drv);
     indev_drv.type = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = lvgl_ts_read_cb;
-    lv_indev_drv_register(&indev_drv);	
+    indev_drv.read_cb = lvgl_mouse_read_cb;
+    indev_ptr = lv_indev_drv_register(&indev_drv);
+
+    /* Set cursor */
+    lv_obj_t * mouse_cursor = lv_img_create(lv_disp_get_scr_act(NULL), NULL);
+    lv_img_set_src(mouse_cursor, LV_SYMBOL_UP);
+    lv_indev_set_cursor(indev_ptr, mouse_cursor);
+
+    /**
+      * Encoder
+      */
+    /* Initialize your mouse if you have */
+    /* Nothing to do here */
+
+    /* Register a mouse input device */
+    lv_indev_drv_init(&indev_drv);
+    indev_drv.type = LV_INDEV_TYPE_ENCODER;
+    indev_drv.read_cb = lvgl_encoder_read_cb;
+    enc_indev = lv_indev_drv_register(&indev_drv);
 }
 
 static void lvgl_disp_write_cb(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* color_p)
@@ -148,6 +191,7 @@ static bool lvgl_ts_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data)
 {
     static lv_coord_t last_x = 0;
     static lv_coord_t last_y = 0;
+    static uint8_t last_ts_detected = 0;
 	TS_StateTypeDef TS_State;
 	
 	/* Fill touchscreen struct */
@@ -158,13 +202,104 @@ static bool lvgl_ts_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data)
         last_x = TS_State.touchX[0];
         last_y = TS_State.touchY[0];
         data->state = LV_INDEV_STATE_PR;
-    } else {
+    } else if(last_ts_detected) {
+        last_ts_detected = 0;
         data->state = LV_INDEV_STATE_REL;
+    }
+    last_ts_detected = TS_State.touchDetected;
+
+    /*Set the last pressed coordinates*/
+    data->point.x = last_x;
+    data->point.y = last_y;
+
+    /*Return `false` because we are not buffering and no more data to read*/
+    return false;
+}
+
+static bool lvgl_mouse_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data)
+{
+    static lv_coord_t last_x = 0;
+    static lv_coord_t last_y = 0;
+    static HID_MOUSE_Info_TypeDef last_m_pinfo;
+    USBH_HandleTypeDef * phost = &hUSBH;
+    HID_HandleTypeDef * HID_Handle;
+
+    /* Fill mouse struct */
+    if(husb_state == HOST_USER_CLASS_ACTIVE)
+    {
+        if(USBH_GetActiveClass(phost) == USB_HID_CLASS)
+        {
+        	HID_Handle = (HID_HandleTypeDef *) phost->pActiveClass->pData;
+        	if(HID_Handle->state != HID_INIT)
+        	{
+        		if(USBH_HID_GetDeviceType(phost) == HID_MOUSE)
+        		{
+        			m_pinfo = USBH_HID_GetMouseInfo(phost);
+        		}
+        	}
+        }
+    }
+
+    /*Save the pressed coordinates and the state*/
+    if(m_pinfo != NULL) {
+        last_x += (int8_t) m_pinfo->x;
+        last_y += (int8_t) m_pinfo->y;
+
+    	if(last_x > indev->disp->driver.hor_res) {
+    	    last_x = indev->disp->driver.hor_res;
+    	}
+    	if(last_x < 0) {
+    	    last_x = 0;
+    	}
+
+    	if(last_y > indev->disp->driver.ver_res) {
+    	    last_y = indev->disp->driver.ver_res;
+    	}
+    	if(last_y < 0) {
+    	    last_y = 0;
+    	}
+
+        if(m_pinfo->buttons[0]) {
+            data->state = LV_INDEV_STATE_PR;
+        } else if(m_pinfo->buttons[1]) {
+            data->state = LV_INDEV_STATE_RIGHT_PR;
+        } else if(last_m_pinfo.buttons[0]) {
+            last_m_pinfo.buttons[0] = 0;
+            data->state = LV_INDEV_STATE_REL;
+        } else if(last_m_pinfo.buttons[1]) {
+            last_m_pinfo.buttons[1] = 0;
+            data->state = LV_INDEV_STATE_RIGHT_REL;
+        }
+
+        last_m_pinfo = (HID_MOUSE_Info_TypeDef) (* m_pinfo);
     }
 
     /*Set the last pressed coordinates*/
     data->point.x = last_x;
     data->point.y = last_y;
+
+    /*Return `false` because we are not buffering and no more data to read*/
+    return false;
+}
+
+static bool lvgl_encoder_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data)
+{
+    int8_t dir;
+
+    /* Fill encoder struct */
+    /* Nothing to do here */
+
+    /*Assing new value*/
+    if(m_pinfo != NULL) {
+		dir = (int8_t) m_pinfo->wheel_dir;
+		if(dir > 0) {
+			data->enc_diff++;
+		}
+		else if(dir < 0) {
+			data->enc_diff--;
+		}
+		data->state = LV_INDEV_STATE_REL;
+    }
 
     /*Return `false` because we are not buffering and no more data to read*/
     return false;

@@ -50,6 +50,8 @@
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+uint32_t tickstart = 0;
+
 /* Private function prototypes -----------------------------------------------*/
 static void SystemClock_Config(void);
 static void Error_Handler(void);
@@ -103,12 +105,16 @@ int main(void)
   /* Infinite loop */
   while (1)
   {
+	  lv_fm_non_task_process();
+
 	  /* Call lv_task_handler() periodically every few milliseconds.
 	   * It will redraw the screen if required, handle input devices etc. */
-	  lv_task_handler();
+	  if((HAL_GetTick() - tickstart) > 5)
+	  {
+	  	lv_task_handler();
 
-	  /* 5 ms delay */
-	  HAL_Delay(5);
+	  	tickstart = HAL_GetTick();
+	  }
   }
 }
 

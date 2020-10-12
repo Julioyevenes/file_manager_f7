@@ -41,6 +41,7 @@
 /* Exported variables --------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
 void lv_fm_init(void);
+void lv_fm_non_task_process(void);
 
 #ifdef __cplusplus
 }

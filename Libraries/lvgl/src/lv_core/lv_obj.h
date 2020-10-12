@@ -90,6 +90,7 @@ enum {
     LV_EVENT_LONG_PRESSED_REPEAT, /**< Called after `LV_INDEV_LONG_PRESS_TIME` in every
                                        `LV_INDEV_LONG_PRESS_REP_TIME` ms.  Not called if dragged.*/
     LV_EVENT_CLICKED,             /**< Called on release if not dragged (regardless to long press)*/
+    LV_EVENT_RIGHT_CLICKED,       /**< Called on release if not dragged (regardless to long press)*/
     LV_EVENT_RELEASED,            /**< Called in every cases when the object has been released*/
     LV_EVENT_DRAG_BEGIN,
     LV_EVENT_DRAG_END,
