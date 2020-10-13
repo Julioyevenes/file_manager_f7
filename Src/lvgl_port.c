@@ -102,6 +102,10 @@ void lvgl_disp_init(void)
       */
     lv_disp_drv_init(&disp_drv);                    /* Basic initialization */
 
+    /* Set the resolution of the display */
+    disp_drv.hor_res = (lv_coord_t) BSP_LCD_GetXSize();
+    disp_drv.ver_res = (lv_coord_t) BSP_LCD_GetYSize();
+
     /* Used to copy the buffer's content to the display */
     disp_drv.flush_cb = lvgl_disp_write_cb;
 
@@ -165,8 +169,8 @@ static void lvgl_disp_write_cb(lv_disp_drv_t* disp_drv, const lv_area_t* area, l
 	/*Truncate the area to the screen*/
 	int32_t act_x1 = area->x1 < 0 ? 0 : area->x1;
 	int32_t act_y1 = area->y1 < 0 ? 0 : area->y1;
-	int32_t act_x2 = area->x2 > LV_HOR_RES_MAX - 1 ? LV_HOR_RES_MAX - 1 : area->x2;
-	int32_t act_y2 = area->y2 > LV_VER_RES_MAX - 1 ? LV_VER_RES_MAX - 1 : area->y2;
+	int32_t act_x2 = area->x2 > disp_drv->hor_res - 1 ? disp_drv->hor_res - 1 : area->x2;
+	int32_t act_y2 = area->y2 > disp_drv->ver_res - 1 ? disp_drv->ver_res - 1 : area->y2;
 
 	x1_flush = act_x1;
 	y1_flush = act_y1;
@@ -179,7 +183,7 @@ static void lvgl_disp_write_cb(lv_disp_drv_t* disp_drv, const lv_area_t* area, l
 	HAL_StatusTypeDef err;
 	err = HAL_DMA_Start_IT(&lvgl_hdma,
 						   (uint32_t)buf_to_flush,
-						   (uint32_t)&my_fb[y_flush_act * LV_HOR_RES_MAX + x1_flush],
+						   (uint32_t)&my_fb[y_flush_act * disp_drv->hor_res + x1_flush],
 			               (x2_flush - x1_flush + 1));
 	if(err != HAL_OK)
 	{
@@ -380,7 +384,7 @@ static void DMA_TransferComplete(DMA_HandleTypeDef *hdma)
 	  /* Enable All the DMA interrupts */
 	  if(HAL_DMA_Start_IT(hdma,
 						  (uint32_t)buf_to_flush, 
-						  (uint32_t)&my_fb[y_flush_act * LV_HOR_RES_MAX + x1_flush],
+						  (uint32_t)&my_fb[y_flush_act * disp_drv.hor_res + x1_flush],
 						  (x2_flush - x1_flush + 1)) != HAL_OK)
 	  {
 	    while(1);	/*Halt on error*/

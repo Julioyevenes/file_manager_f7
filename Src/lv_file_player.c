@@ -148,9 +148,10 @@ static void lv_fm_player_create(lv_obj_t * parent)
 	lv_obj_set_event_cb(btn, lv_fm_player_btn_event_cb);
 
 	lv_obj_t * slider = lv_slider_create(player_h, NULL);
+	lv_slider_set_range(slider, 0, 80);
 	lv_slider_set_value(slider, 50, LV_ANIM_OFF);
 	lv_obj_set_event_cb(slider, lv_fm_player_slider_event_cb);
-	lv_obj_set_width(slider, lv_obj_get_width_fit(player_h) / 2);
+	lv_obj_set_width(slider, lv_obj_get_width_fit(player_h) / 3);
 
 	player_bar = lv_bar_create(player_h, NULL);
 	lv_obj_set_width(player_bar, lv_obj_get_width_fit(player_h));

@@ -633,7 +633,14 @@ static uint8_t lv_fm_media_detect(lv_fm_media_t * m)
 			return BSP_SD_IsDetected();
 
 		case LV_FM_MEDIA_USB:
-			return !m->drv->disk_status(m->lun);
+			if(USBH_GetActiveClass(&hUSBH) == USB_MSC_CLASS)
+			{
+				return !m->drv->disk_status(m->lun);
+			}
+			else
+			{
+				return 0;
+			}
 	}
 
 	return 0;
