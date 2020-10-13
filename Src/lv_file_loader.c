@@ -177,8 +177,8 @@ static void lv_fm_loader_copy(lv_fm_loader_handle_t * h)
 	lv_obj_set_width(btn, lv_obj_get_width_fit(loader_h));
 	lv_obj_set_event_cb(btn, lv_fm_loader_copying_btn_event_cb);
 
-	loader_copy_task = lv_task_create(lv_fm_loader_copy_task, 1, LV_TASK_PRIO_MID, h);
-	loader_bar_task = lv_task_create(lv_fm_loader_bar_task, 100, LV_TASK_PRIO_MID, h);
+	loader_copy_task = lv_task_create(lv_fm_loader_copy_task, 1, LV_TASK_PRIO_LOW, h);
+	loader_bar_task = lv_task_create(lv_fm_loader_bar_task, 100, LV_TASK_PRIO_LOW, h);
 }
 
 static void lv_fm_loader_start(lv_fm_loader_handle_t * h)

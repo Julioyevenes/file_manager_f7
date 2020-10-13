@@ -288,7 +288,7 @@ static void lv_fm_local_tab_create(lv_obj_t * parent)
 
     lv_page_set_scrl_layout(parent, LV_LAYOUT_GRID);
 
-	fm_task_data.buffer_size = 512 * 1;
+	fm_task_data.buffer_size = 1024 * 32;
 	fm_task_data.obj = &fm_obj_save;
 	
     list_local = lv_fm_list_create(parent, grid_w, grid_h, LV_ALIGN_CENTER, NULL, NULL);
@@ -1006,8 +1006,8 @@ static lv_fm_err_t lv_fm_file_copy(lv_fm_task_data_t * data)
 
 	lv_obj_align(h, NULL, LV_ALIGN_CENTER, 0, 0);
 
-	file_task = lv_task_create(lv_fm_file_task, 1, LV_TASK_PRIO_MID, data);
-	bar_task = lv_task_create(lv_fm_bar_task, 100, LV_TASK_PRIO_MID, data);
+	file_task = lv_task_create(lv_fm_file_task, 1, LV_TASK_PRIO_LOW, data);
+	bar_task = lv_task_create(lv_fm_bar_task, 100, LV_TASK_PRIO_LOW, data);
 
 	return LV_FM_NO_ERROR;
 }
