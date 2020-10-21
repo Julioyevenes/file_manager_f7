@@ -33,6 +33,8 @@
 #include "usbh_core.h"
 #include "usbh_hid.h"
 
+#include "hal_jpeg_codec.h"
+
 /* Private types ------------------------------------------------------------*/
 /* Private constants --------------------------------------------------------*/
 /* DMA Stream parameters definitions. You can modify these parameters to select
@@ -58,19 +60,29 @@ static volatile int32_t 			y1_flush;
 static volatile int32_t 			x2_flush;
 static volatile int32_t 			y2_flush;
 static volatile int32_t 			y_flush_act;
-static volatile const lv_color_t 	*buf_to_flush;
+static volatile const lv_color_t *	buf_to_flush;
 
-uint8_t husb_state;
-USBH_HandleTypeDef hUSBH;
-HID_MOUSE_Info_TypeDef * m_pinfo;
+static uint8_t * 					lvgl_img_addr;
+static FIL 							lvgl_img_fh;
+static JPEG_HandleTypeDef 			lvgl_img_hjpeg;
+static JPEG_ConfTypeDef   			lvgl_img_jpeginfo;
+static jpeg_codec_handle_t 			lvgl_img_hjpegcodec;
+
+uint8_t 					husb_state;
+USBH_HandleTypeDef 			hUSBH;
+HID_MOUSE_Info_TypeDef * 	m_pinfo;
 
 lv_indev_t * enc_indev;
 
 /* Private function prototypes ----------------------------------------------*/
-static void lvgl_disp_write_cb(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* color_p);
-static bool lvgl_ts_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
-static bool lvgl_mouse_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
-static bool lvgl_encoder_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
+static void 	lvgl_disp_write_cb(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* color_p);
+static bool 	lvgl_ts_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
+static bool 	lvgl_mouse_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
+static bool 	lvgl_encoder_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data);
+static lv_res_t lvgl_img_decoder_info_cb(struct _lv_img_decoder * decoder, const void * src, lv_img_header_t * header);
+static lv_res_t lvgl_img_decoder_open_cb(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * dsc);
+static void 	lvgl_img_decoder_close_cb(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * dsc);
+
 static void DMA_Config(void);
 static void DMA_TransferComplete(DMA_HandleTypeDef *han);
 static void DMA_TransferError(DMA_HandleTypeDef *han);
@@ -162,6 +174,31 @@ void lvgl_indev_init(void)
     indev_drv.type = LV_INDEV_TYPE_ENCODER;
     indev_drv.read_cb = lvgl_encoder_read_cb;
     enc_indev = lv_indev_drv_register(&indev_drv);
+}
+
+void lvgl_img_decoder_init(void)
+{
+    uint32_t offset;
+
+    /* Init The JPEG Look Up Tables used for YCbCr to RGB conversion */
+    JPEG_InitColorTables();
+
+    /* Init the HAL JPEG driver */
+    lvgl_img_hjpeg.Instance = JPEG;
+    HAL_JPEG_Init(&lvgl_img_hjpeg);
+
+    /* Set image raw data address */
+#if LV_COLOR_DEPTH == 16
+    offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * 2;
+#else
+    offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * 4;
+#endif
+    lvgl_img_addr = (uint8_t *) (LCD_FB_START_ADDRESS + offset);
+
+    lv_img_decoder_t * dec = lv_img_decoder_create();
+    lv_img_decoder_set_info_cb(dec, lvgl_img_decoder_info_cb);
+    lv_img_decoder_set_open_cb(dec, lvgl_img_decoder_open_cb);
+    lv_img_decoder_set_close_cb(dec, lvgl_img_decoder_close_cb);
 }
 
 static void lvgl_disp_write_cb(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* color_p)
@@ -307,6 +344,118 @@ static bool lvgl_encoder_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data)
 
     /*Return `false` because we are not buffering and no more data to read*/
     return false;
+}
+
+static lv_res_t lvgl_img_decoder_info_cb(struct _lv_img_decoder * decoder, const void * src, lv_img_header_t * header)
+{
+    lv_img_src_t src_type = lv_img_src_get_type(src);          /*Get the source type*/
+
+    if(src_type == LV_IMG_SRC_FILE)
+    {
+        const char * fn = src;
+
+        if(!strcmp(&fn[strlen(fn) - 3], "JPG") || \
+           !strcmp(&fn[strlen(fn) - 3], "jpg"))
+        {
+            /* Open the JPG file with read access */
+            if(f_open(&lvgl_img_fh, fn, FA_READ) == FR_OK)
+            {
+                /* Init JPEG codec */
+                jpeg_decoder_init(&lvgl_img_hjpegcodec,
+                                  &lvgl_img_hjpeg,
+                                  &lvgl_img_fh,
+                                  (uint32_t) lvgl_img_addr);
+
+                /* JPEG decoding with DMA */
+                jpeg_decoder_start(&lvgl_img_hjpegcodec);
+
+                /* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
+                do
+                {
+                    jpeg_decoder_io(&lvgl_img_hjpegcodec);
+                }
+                while(lvgl_img_hjpegcodec.state != JPEG_CODEC_STATE_IMG);
+
+                /* Call abort function to clean handle */
+                HAL_JPEG_Abort(&lvgl_img_hjpeg);
+
+                /* Get JPEG Info */
+                HAL_JPEG_GetInfo(&lvgl_img_hjpeg, &lvgl_img_jpeginfo);
+
+                header->cf = LV_IMG_CF_TRUE_COLOR;
+                header->w = lvgl_img_jpeginfo.ImageWidth;
+                header->h = lvgl_img_jpeginfo.ImageHeight;
+
+                /* Free JPEG decoder resources */
+                jpeg_decoder_free(&lvgl_img_hjpegcodec);
+
+                /* Close the JPEG file */
+                f_close(&lvgl_img_fh);
+
+                /* Discard image if is bigger than res limit */
+                if(lvgl_img_jpeginfo.ImageWidth > 2048 || \
+                   lvgl_img_jpeginfo.ImageHeight > 2048)
+                {
+                	header->cf = LV_IMG_CF_UNKNOWN;
+                	header->w = header->h = 0;
+
+                	return LV_RES_INV;
+                }
+
+                return LV_RES_OK;
+            }
+        }
+    }
+
+    return LV_RES_INV;         /*If didn't succeeded earlier then it's an error*/
+}
+
+static lv_res_t lvgl_img_decoder_open_cb(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * dsc)
+{
+    if(dsc->src_type == LV_IMG_SRC_FILE)
+    {
+        const char * fn = dsc->src;
+
+        if(!strcmp(&fn[strlen(fn) - 3], "JPG") || \
+           !strcmp(&fn[strlen(fn) - 3], "jpg"))
+        {
+            /* Open the JPG file with read access */
+            if(f_open(&lvgl_img_fh, fn, FA_READ) == FR_OK)
+            {
+                /* Init JPEG codec */
+                jpeg_decoder_init(&lvgl_img_hjpegcodec,
+                                  &lvgl_img_hjpeg,
+                                  &lvgl_img_fh,
+                                  (uint32_t) lvgl_img_addr);
+
+                /* JPEG decoding with DMA */
+                jpeg_decoder_start(&lvgl_img_hjpegcodec);
+
+                /* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
+                do
+                {
+                    jpeg_decoder_io(&lvgl_img_hjpegcodec);
+                }
+                while(lvgl_img_hjpegcodec.state != JPEG_CODEC_STATE_IDLE);
+
+				dsc->img_data = (uint8_t *) lvgl_img_addr;
+
+                /* Free JPEG decoder resources */
+                jpeg_decoder_free(&lvgl_img_hjpegcodec);
+
+                /* Close the JPEG file */
+                f_close(&lvgl_img_fh);
+
+				return LV_RES_OK;
+            }
+        }
+    }
+
+    return LV_RES_INV;         /*If didn't succeeded earlier then it's an error*/
+}
+
+static void lvgl_img_decoder_close_cb(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * dsc)
+{
 }
 
 /**

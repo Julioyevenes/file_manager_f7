@@ -3901,7 +3901,8 @@ FRESULT f_rename (
 /* Start of critical section where any interruption can cause a cross-link */
 						dir = djn.dir;					/* Copy information about object except name */
 						mem_cpy(dir + 13, buf + 2, 19);
-						dir[DIR_Attr] = buf[0] | AM_ARC;
+						/* dir[DIR_Attr] = buf[0] | AM_ARC; */
+						dir[DIR_Attr] = buf[0];
 						djo.fs->wflag = 1;
 						if ((dir[DIR_Attr] & AM_DIR) && djo.sclust != djn.sclust) {	/* Update .. entry in the sub-directory if needed */
 							dw = clust2sect(djo.fs, ld_clust(djo.fs, dir));

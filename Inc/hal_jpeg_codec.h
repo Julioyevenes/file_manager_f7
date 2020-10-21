@@ -25,25 +25,73 @@
   */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __LVGL_PORT_H
-#define __LVGL_PORT_H
+#ifndef __HAL_JPEG_CODEC_H
+#define __HAL_JPEG_CODEC_H
 
 #ifdef __cplusplus
  extern "C" {
 #endif 
 
 /* Includes ------------------------------------------------------------------*/
+#include "jpeg_utils.h"
+#include "ff.h"
+
 /* Exported types ------------------------------------------------------------*/
+typedef enum
+{
+    JPEG_CODEC_NO_ERROR = 0,
+    JPEG_CODEC_READ_ERROR,
+    JPEG_CODEC_WRITE_ERROR,
+    JPEG_CODEC_MEMORY_ERROR
+} jpeg_codec_err_t;
+
+typedef enum
+{
+    JPEG_CODEC_STATE_IDLE = 0,
+    JPEG_CODEC_STATE_INFO,
+	JPEG_CODEC_STATE_IMG
+} jpeg_codec_state_t;
+
+typedef struct
+{
+    uint8_t 	full : 1;
+    uint8_t *	ptr;
+    uint32_t 	size;
+} jpeg_codec_buffer_t;
+
+typedef struct
+{
+    uint8_t								in_read_idx : 1;
+    uint8_t								in_write_idx : 1;
+    uint8_t								out_read_idx : 1;
+    uint8_t								out_write_idx : 1;
+    uint8_t 							in_pause : 1;
+    uint8_t 							out_pause : 1;
+    uint8_t *							frame_addr;
+    uint32_t							mcu_total;
+    uint32_t							mcu_value;
+
+    FIL	*								fp;
+
+    JPEG_HandleTypeDef * 				hjpeg;
+    JPEG_YCbCrToRGB_Convert_Function 	color_fn;
+
+    jpeg_codec_buffer_t 				in_buf[2];
+    jpeg_codec_buffer_t 				out_buf[2];
+    jpeg_codec_state_t 					state;
+} jpeg_codec_handle_t;
+
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported variables --------------------------------------------------------*/
-/* Exported functions ------------------------------------------------------- */
-void lvgl_disp_init(void);
-void lvgl_indev_init(void);
-void lvgl_img_decoder_init(void);
+/* Exported functions --------------------------------------------------------*/
+jpeg_codec_err_t 	jpeg_decoder_init(jpeg_codec_handle_t * hcodec, JPEG_HandleTypeDef * hjpeg, FIL * fp, uint32_t dst_addr);
+jpeg_codec_err_t 	jpeg_decoder_start(jpeg_codec_handle_t * hcodec);
+jpeg_codec_err_t 	jpeg_decoder_io(jpeg_codec_handle_t * hcodec);
+void 				jpeg_decoder_free(jpeg_codec_handle_t * hcodec);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __LVGL_PORT_H */
+#endif /* __HAL_JPEG_CODEC_H */

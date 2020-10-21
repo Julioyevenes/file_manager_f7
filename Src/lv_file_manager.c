@@ -209,6 +209,9 @@ static lv_obj_t * h;
 static lv_obj_t * bar;
 static lv_obj_t * mbox_question;
 static lv_obj_t * mbox_err;
+static lv_obj_t * ta;
+static lv_obj_t * kb;
+static lv_obj_t * img;
 static lv_event_t e_last = _LV_EVENT_LAST;
 
 /* Private function prototypes ----------------------------------------------*/
@@ -221,6 +224,8 @@ static void 			lv_fm_list_options_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 static void 			lv_fm_mbox_question_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 static void 			lv_fm_copying_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 static void 			lv_fm_mbox_err_btn_event_cb(lv_obj_t * btn, lv_event_t e);
+static void 			lv_fm_img_event_cb(lv_obj_t * obj, lv_event_t e);
+static void 			lv_fm_kb_event_cb(lv_obj_t * _kb, lv_event_t e);
 
 static void 			lv_fm_usb_cb(USBH_HandleTypeDef * phost, uint8_t id);
 
@@ -232,6 +237,8 @@ static lv_fm_format_t 	lv_fm_get_ext(FILINFO *finfo);
 static void 			lv_fm_copy(lv_fm_task_data_t * data);
 static void 			lv_fm_delete(lv_fm_task_data_t * data);
 static void 			lv_fm_format(lv_fm_task_data_t * data);
+static void 			lv_fm_rename(lv_fm_task_data_t * data);
+static void 			lv_fm_create(lv_fm_task_data_t * data);
 
 static lv_fm_err_t 		lv_fm_file_copy(lv_fm_task_data_t * data);
 static lv_fm_err_t 		lv_fm_folder_scan(lv_fm_task_data_t * data, const char * src_path, const char * dst_path, const char * name);
@@ -375,7 +382,8 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 				if (list_options == NULL && \
 					player_h == NULL && \
 					loader_h == NULL && \
-					h == NULL)
+					h == NULL && \
+					img == NULL)
 				{
 					fm_task_data.fr = f_open (&(fm_task_data.src), tobj->name, FA_READ);
 					if (fm_task_data.fr == FR_OK)
@@ -386,12 +394,32 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 					}
 				}
 			}
+			else if(tobj->format == jpeg)
+			{
+				if (list_options == NULL && \
+					player_h == NULL && \
+					loader_h == NULL && \
+					h == NULL && \
+					img == NULL)
+				{
+					img = lv_img_create(lv_scr_act(), NULL);
+					lv_img_set_src(img, tobj->name);
+					lv_obj_set_drag(img, true);
+					lv_obj_set_event_cb(img, lv_fm_img_event_cb);
+
+		    		if(lv_obj_get_width(img) == 0 || lv_obj_get_height(img) == 0)
+		    		{
+		    		    LV_FM_OBJ_DEL(img)
+		    		}
+				}
+			}
 			else if(tobj->format == bin)
 			{
 				if (list_options == NULL && \
 					player_h == NULL && \
 					loader_h == NULL && \
-					h == NULL)
+					h == NULL && \
+					img == NULL)
 				{
 					fm_task_data.fr = f_open (&(fm_task_data.src), tobj->name, FA_READ);
 					if (fm_task_data.fr == FR_OK)
@@ -415,7 +443,8 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 		if (list_options == NULL && \
 			player_h == NULL && \
 			loader_h == NULL && \
-			h == NULL)
+			h == NULL && \
+			img == NULL)
 		{
 			fm_obj_save = fm_obj[i];
 			if(tobj->volume == 1 && \
@@ -490,6 +519,7 @@ static void lv_fm_list_options_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 		}
 		else if (strcmp(pstr, "Rename") == 0)
 		{
+			lv_fm_rename(&fm_task_data);
 		}
 		else if (strcmp(pstr, "Format") == 0)
 		{
@@ -501,6 +531,7 @@ static void lv_fm_list_options_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 		}
 		else if (strcmp(pstr, "New folder") == 0)
 		{
+			lv_fm_create(&fm_task_data);
 		}
 		else if (strcmp(pstr, "Cancel") == 0)
 		{
@@ -579,6 +610,45 @@ static void lv_fm_mbox_err_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 			LV_FM_OBJ_DEL(mbox_err)
 		}
 	}
+}
+
+static void lv_fm_img_event_cb(lv_obj_t * obj, lv_event_t e)
+{
+	if (e == LV_EVENT_CLICKED || \
+		e == LV_EVENT_DEFOCUSED)
+	{
+		LV_FM_OBJ_DEL(img)
+	}
+}
+
+static void lv_fm_kb_event_cb(lv_obj_t * _kb, lv_event_t e)
+{
+    char * pstr;
+
+    lv_keyboard_def_event_cb(kb, e);
+
+    if(e == LV_EVENT_APPLY)
+    {
+		pstr = lv_textarea_get_text(ta);
+
+		if( f_rename ((TCHAR *) fm_task_data.obj->name, (TCHAR*) pstr) != FR_OK)
+		{
+			fm_task_data.err = LV_FM_WRITE_ERROR;
+		}
+
+		lv_fm_list_fill(&fm_media[0], &fm_obj[0], list_local, lv_fm_list_local_btn_event_cb, 0);
+
+		lv_obj_set_height(tv, LV_VER_RES);
+		LV_FM_OBJ_DEL(kb)
+		LV_FM_OBJ_DEL(h)
+    }
+
+    if(e == LV_EVENT_CANCEL)
+    {
+		lv_obj_set_height(tv, LV_VER_RES);
+		LV_FM_OBJ_DEL(kb)
+		LV_FM_OBJ_DEL(h)
+    }
 }
 
 static void lv_fm_usb_cb(USBH_HandleTypeDef * phost, uint8_t id)
@@ -843,7 +913,6 @@ static void lv_fm_list_fill(lv_fm_media_t * m, lv_fm_obj_t * obj, lv_obj_t * lis
 
 		btn = lv_list_add_btn(list, pimg, tobj->name);
 		lv_obj_set_event_cb(btn, event_cb);
-		lv_btn_set_checkable(btn, true);
 	}
 }
 
@@ -973,6 +1042,56 @@ static void lv_fm_format(lv_fm_task_data_t * data)
 	{
 		data->err = LV_FM_FORMAT_ERROR;
 	}
+
+	data->stage = LV_FM_IDLE_STAGE;
+
+	lv_obj_set_width(list_local, grid_w);
+	lv_obj_align(list_local, t1, LV_ALIGN_CENTER, 0, 0);
+	LV_FM_OBJ_DEL(list_options)
+}
+
+static void lv_fm_rename(lv_fm_task_data_t * data)
+{
+	lv_coord_t grid_h = lv_page_get_height_grid(t1, 1, 1);
+	lv_coord_t grid_w = lv_page_get_width_grid(t1, 1, 1);
+
+	h = lv_cont_create(t1, NULL);
+	lv_cont_set_layout(h, LV_LAYOUT_PRETTY_MID);
+    lv_cont_set_fit2(h, LV_FIT_NONE, LV_FIT_TIGHT);
+	lv_obj_set_width(h, lv_page_get_width_grid(t1, 1, 1));
+
+	ta = lv_textarea_create(h, NULL);
+	lv_cont_set_fit2(ta, LV_FIT_PARENT, LV_FIT_NONE);
+	lv_textarea_set_text(ta, "");
+	lv_textarea_set_placeholder_text(ta, "Enter new name");
+	lv_textarea_set_one_line(ta, true);
+	lv_textarea_set_cursor_hidden(ta, false);
+
+	lv_obj_set_height(tv, LV_VER_RES / 2);
+	kb = lv_keyboard_create(lv_scr_act(), NULL);
+	lv_obj_set_event_cb(kb, lv_fm_kb_event_cb);
+	lv_page_focus(t1, lv_textarea_get_label(ta), LV_ANIM_ON);
+	lv_keyboard_set_textarea(kb, ta);
+
+	data->err = LV_FM_NO_ERROR;
+	data->stage = LV_FM_IDLE_STAGE;
+
+	lv_obj_set_width(list_local, grid_w);
+	lv_obj_align(list_local, t1, LV_ALIGN_CENTER, 0, 0);
+	LV_FM_OBJ_DEL(list_options)
+}
+
+static void lv_fm_create(lv_fm_task_data_t * data)
+{
+	lv_coord_t grid_h = lv_page_get_height_grid(t1, 1, 1);
+	lv_coord_t grid_w = lv_page_get_width_grid(t1, 1, 1);
+
+	if( f_mkdir ("New folder") != FR_OK)
+	{
+		data->err = LV_FM_WRITE_ERROR;
+	}
+
+	lv_fm_list_fill(&fm_media[0], &fm_obj[0], list_local, lv_fm_list_local_btn_event_cb, 0);
 
 	data->stage = LV_FM_IDLE_STAGE;
 

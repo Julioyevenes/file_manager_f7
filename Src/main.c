@@ -99,6 +99,9 @@ int main(void)
   /* Init indev */
   lvgl_indev_init();
 
+  /* Init image decoder */
+  lvgl_img_decoder_init();
+
   /* Init app */
   lv_fm_init();
 

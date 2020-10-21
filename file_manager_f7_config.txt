@@ -15,6 +15,7 @@ Exclusion(files):	Libraries/STM32F7xx_HAL_Driver/src/stm32f7xx_hal_msp_template.
 			Libraries/FatFs/src/ffconf_template.h
 			Libraries/STM32_USB_Host_Library/Core/Inc/usbh_conf_template.h
 			Libraries/STM32_USB_Host_Library/Core/Src/usbh_conf_template.c
+			Libraries/Utilities/JPEG/jpeg_utils_conf_template.h
 
 Include(directories):	/STM32Cube_FW_F7_V1.16.0/Drivers/CMSIS/Include
 			/STM32Cube_FW_F7_V1.16.0/Drivers/CMSIS/Device/ST/STM32F7xx/Include
@@ -31,4 +32,5 @@ Include(directories):	/STM32Cube_FW_F7_V1.16.0/Drivers/CMSIS/Include
 			/file_manager_f7/Libraries/audiolib/codecs/flaccodec/libFLAC/include
 			/file_manager_f7/Libraries/STM32_USB_Host_Library/Class/HID/Inc
 			/file_manager_f7/Libraries/STM32_USB_Host_Library/Class/MSC/Inc
-			/file_manager_f7/Libraries/STM32_USB_Host_Library/Core/Inc	
+			/file_manager_f7/Libraries/STM32_USB_Host_Library/Core/Inc
+			/file_manager_f7/Libraries/Utilities/JPEG	
