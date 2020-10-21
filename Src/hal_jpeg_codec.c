@@ -171,33 +171,6 @@ void jpeg_decoder_free(jpeg_codec_handle_t * hcodec)
 
 void HAL_JPEG_InfoReadyCallback(JPEG_HandleTypeDef * hjpeg, JPEG_ConfTypeDef * pInfo)
 {
-	if(pInfo->ChromaSubsampling == JPEG_420_SUBSAMPLING)
-	{
-		if((pInfo->ImageWidth % 16) != 0)
-		pInfo->ImageWidth += (16 - (pInfo->ImageWidth % 16));
-
-		if((pInfo->ImageHeight % 16) != 0)
-		pInfo->ImageHeight += (16 - (pInfo->ImageHeight % 16));
-	}
-
-	if(pInfo->ChromaSubsampling == JPEG_422_SUBSAMPLING)
-	{
-		if((pInfo->ImageWidth % 16) != 0)
-		pInfo->ImageWidth += (16 - (pInfo->ImageWidth % 16));
-
-		if((pInfo->ImageHeight % 8) != 0)
-		pInfo->ImageHeight += (8 - (pInfo->ImageHeight % 8));
-	}
-
-	if(pInfo->ChromaSubsampling == JPEG_444_SUBSAMPLING)
-	{
-		if((pInfo->ImageWidth % 8) != 0)
-		pInfo->ImageWidth += (8 - (pInfo->ImageWidth % 8));
-
-		if((pInfo->ImageHeight % 8) != 0)
-		pInfo->ImageHeight += (8 - (pInfo->ImageHeight % 8));
-	}
-
 	JPEG_GetDecodeColorConvertFunc(pInfo, &(hjpegcodec->color_fn), &(hjpegcodec->mcu_total));
 
 	hjpegcodec->state = JPEG_CODEC_STATE_IMG;
