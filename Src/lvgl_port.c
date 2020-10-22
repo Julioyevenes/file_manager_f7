@@ -37,6 +37,9 @@
 
 /* Private types ------------------------------------------------------------*/
 /* Private constants --------------------------------------------------------*/
+#define LVGL_JPEG_INFO_TIMEOUT 	500
+#define LVGL_JPEG_IMG_TIMEOUT 	5000
+
 /* DMA Stream parameters definitions. You can modify these parameters to select
    a different DMA Stream and/or channel.
    But note that only DMA2 Streams are capable of Memory to Memory transfers. */
@@ -370,11 +373,13 @@ static lv_res_t lvgl_img_decoder_info_cb(struct _lv_img_decoder * decoder, const
                 jpeg_decoder_start(&lvgl_img_hjpegcodec);
 
                 /* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
+                uint32_t timeout = HAL_GetTick();
                 do
                 {
                     jpeg_decoder_io(&lvgl_img_hjpegcodec);
                 }
-                while(lvgl_img_hjpegcodec.state != JPEG_CODEC_STATE_IMG);
+                while(lvgl_img_hjpegcodec.state != JPEG_CODEC_STATE_IMG && \
+                	  (HAL_GetTick() - timeout) < LVGL_JPEG_INFO_TIMEOUT);
 
                 /* Call abort function to clean handle */
                 HAL_JPEG_Abort(&lvgl_img_hjpeg);
@@ -432,11 +437,19 @@ static lv_res_t lvgl_img_decoder_open_cb(lv_img_decoder_t * decoder, lv_img_deco
                 jpeg_decoder_start(&lvgl_img_hjpegcodec);
 
                 /* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
+                uint32_t timeout = HAL_GetTick();
                 do
                 {
                     jpeg_decoder_io(&lvgl_img_hjpegcodec);
                 }
-                while(lvgl_img_hjpegcodec.state != JPEG_CODEC_STATE_IDLE);
+                while(lvgl_img_hjpegcodec.state != JPEG_CODEC_STATE_IDLE && \
+                	  (HAL_GetTick() - timeout) < LVGL_JPEG_IMG_TIMEOUT);
+
+                if(lvgl_img_hjpegcodec.state != JPEG_CODEC_STATE_IDLE)
+                {
+                	/* Call abort function to clean handle */
+                	HAL_JPEG_Abort(&lvgl_img_hjpeg);
+                }
 
 				dsc->img_data = (uint8_t *) lvgl_img_addr;
 
