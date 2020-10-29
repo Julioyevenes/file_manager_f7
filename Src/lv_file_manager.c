@@ -82,10 +82,12 @@ typedef enum
 
 typedef struct
 {
-	char 			name[13];
+	char 			name[255];
 
 	uint8_t 		folder : 1;
 	uint8_t 		volume : 1;
+
+	uint32_t		size;
 
 	lv_fm_format_t 	format;
 } lv_fm_obj_t;
@@ -107,7 +109,7 @@ typedef struct
 
 typedef struct
 {
-	char 		name[13];
+	char 		name[255];
 	char		src_path[255];
 	char		dst_path[255];
 } lv_fm_queue_data_t;
@@ -183,7 +185,7 @@ const char * btns01[] = {"Cancel", "Ok", ""};
 							}
 
 /* Private variables --------------------------------------------------------*/
-FILINFO 	finfo;
+char lfn_buffer[255];
 
 extern uint8_t husb_state;
 extern USBH_HandleTypeDef hUSBH;
@@ -769,9 +771,14 @@ static void lv_fm_list_fill(lv_fm_media_t * m, lv_fm_obj_t * obj, lv_obj_t * lis
 	lv_fm_obj_t * tobj;
 	lv_fm_media_t * tm;
 	char path[255];
+	char str[255];
     FRESULT fr;
     DIR dir;
+    FILINFO finfo;
 	char * pimg;
+
+	finfo.lfname = (TCHAR *) &lfn_buffer[0];
+	finfo.lfsize = 255;
 
 	if (svol)
 	{
@@ -823,10 +830,41 @@ static void lv_fm_list_fill(lv_fm_media_t * m, lv_fm_obj_t * obj, lv_obj_t * lis
 					tobj = &obj[nobj];
 					tobj->volume = 0;
 					tobj->folder = 1;
-					strcpy(tobj->name, finfo.fname);
+					if(dir.lfn_idx != 0xFFFF)
+					{
+						strcpy(tobj->name, finfo.lfname);
+					}
+					else
+					{
+						strcpy(tobj->name, finfo.fname);
+					}
 
                 	nobj++;
-    			}			
+    			}
+				else if( (finfo.fattrib == AM_ARC) || (finfo.fattrib == (AM_ARC | AM_RDO)) )
+				{
+					if( (finfo.fname[0] == '.' || finfo.fname[0] == '\0') )
+					{
+						fr = f_findnext(&dir, &finfo);
+						continue;
+					}
+					
+					tobj = &obj[nobj];
+					tobj->volume = 0;
+					tobj->folder = 0;
+					tobj->size = finfo.fsize;
+					tobj->format = lv_fm_get_ext(&finfo);
+					if(dir.lfn_idx != 0xFFFF)
+					{
+						strcpy(tobj->name, finfo.lfname);
+					}
+					else
+					{
+						strcpy(tobj->name, finfo.fname);
+					}
+
+					nobj++;
+				}
 			}
             else
             {
@@ -834,36 +872,6 @@ static void lv_fm_list_fill(lv_fm_media_t * m, lv_fm_obj_t * obj, lv_obj_t * lis
             }
 
 			fr = f_findnext(&dir, &finfo);
-		}
-		
-		fr = f_findfirst (&dir, &finfo, "", "*.*");
-		for(i = 0; i < LV_FM_MAX_ELEMENTS && nobj < LV_FM_MAX_ELEMENTS; i++)
-		{
-			if(fr == FR_OK)
-			{
-				if( (finfo.fattrib == AM_ARC) || (finfo.fattrib == (AM_ARC | AM_RDO)) )
-    			{
-                	if( (finfo.fname[0] == '.' || finfo.fname[0] == '\0') )
-                	{
-                    	fr = f_findnext(&dir, &finfo);
-                    	continue;
-                	}
-					
-					tobj = &obj[nobj];
-					tobj->volume = 0;
-					tobj->folder = 0;
-					tobj->format = lv_fm_get_ext(&finfo);
-					strcpy(tobj->name, finfo.fname);
-
-                	nobj++;
-    			}			
-			}
-            else
-            {
-				break;
-            }
-
-			fr = f_findnext(&dir, &finfo);		
 		}
 	}
 	
@@ -911,7 +919,15 @@ static void lv_fm_list_fill(lv_fm_media_t * m, lv_fm_obj_t * obj, lv_obj_t * lis
             pimg = LV_SYMBOL_FILE;
         }	
 
-		btn = lv_list_add_btn(list, pimg, tobj->name);
+    	if(tobj->folder == 0 && tobj->volume == 0)
+    	{
+    		lv_snprintf(str, sizeof(str), "%s\t-\t%d KB", tobj->name, tobj->size / 1024);
+    		btn = lv_list_add_btn(list, pimg, str);
+    	}
+    	else
+    	{
+    		btn = lv_list_add_btn(list, pimg, tobj->name);
+    	}
 		lv_obj_set_event_cb(btn, event_cb);
 	}
 }
@@ -1140,6 +1156,9 @@ static lv_fm_err_t lv_fm_folder_scan(lv_fm_task_data_t * data, const char * src_
 	char * str_ptr = (char *) &dst_str;
 	lv_fm_queue_data_t q_data;
 	
+	finfo.lfname = (TCHAR *) &lfn_buffer[0];
+	finfo.lfsize = 255;
+
 	f_chdrive (data->dst_vol);
 	if( f_chdir (dst_path) != FR_OK )
 		return LV_FM_READ_ERROR;
@@ -1180,7 +1199,14 @@ static lv_fm_err_t lv_fm_folder_scan(lv_fm_task_data_t * data, const char * src_
 				continue;
 			}
 
-			strcpy(q_data.name, finfo.fname);
+			if(dir.lfn_idx != 0xFFFF)
+			{
+				strcpy(q_data.name, finfo.lfname);
+			}
+			else
+			{
+				strcpy(q_data.name, finfo.fname);
+			}
 			strcpy(q_data.src_path, src_path);
 			strcpy(q_data.dst_path, dst_str);
 
@@ -1212,7 +1238,14 @@ static lv_fm_err_t lv_fm_folder_scan(lv_fm_task_data_t * data, const char * src_
 			if( f_getcwd ((TCHAR*) &src_str, sizeof(src_str)) != FR_OK )
 				return LV_FM_READ_ERROR;
 
-			data->err = lv_fm_folder_scan(data, src_str, dst_str, finfo.fname);
+			if(dir.lfn_idx != 0xFFFF)
+			{
+				data->err = lv_fm_folder_scan(data, src_str, dst_str, finfo.lfname);
+			}
+			else
+			{
+				data->err = lv_fm_folder_scan(data, src_str, dst_str, finfo.fname);
+			}
 			if(data->err != 0)
 				return(data->err);
 
@@ -1234,6 +1267,9 @@ static lv_fm_err_t lv_fm_folder_delete(const char * path)
 	FILINFO 	finfo;
 	lv_fm_err_t err;
 	
+	finfo.lfname = (TCHAR *) &lfn_buffer[0];
+	finfo.lfsize = 255;
+
 	if( f_chdir (path) != FR_OK )
 		return LV_FM_READ_ERROR;
 
