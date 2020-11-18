@@ -78,13 +78,13 @@ static volatile  UINT  WriteStatus = 0, ReadStatus = 0;
 /* Private function prototypes -----------------------------------------------*/
 static DSTATUS SD_CheckStatus(BYTE lun);
 DSTATUS SD_initialize (BYTE);
-DSTATUS SD_status (BYTE);
-DRESULT SD_read (BYTE, BYTE*, DWORD, UINT);
+DSTATUS SD_status (void*, BYTE);
+DRESULT SD_read (void*, BYTE, BYTE*, DWORD, UINT);
 #if _USE_WRITE == 1
-DRESULT SD_write (BYTE, const BYTE*, DWORD, UINT);
+DRESULT SD_write (void*, BYTE, const BYTE*, DWORD, UINT);
 #endif /* _USE_WRITE == 1 */
 #if _USE_IOCTL == 1
-DRESULT SD_ioctl (BYTE, BYTE, void*);
+DRESULT SD_ioctl (void*, BYTE, BYTE, void*);
 #endif  /* _USE_IOCTL == 1 */
 
 const Diskio_drvTypeDef  SD_Driver =
@@ -154,7 +154,7 @@ DSTATUS SD_initialize(BYTE lun)
 * @param  lun : not used
 * @retval DSTATUS: Operation status
 */
-DSTATUS SD_status(BYTE lun)
+DSTATUS SD_status(void* pdata, BYTE lun)
 {
   return SD_CheckStatus(lun);
 }
@@ -167,7 +167,7 @@ DSTATUS SD_status(BYTE lun)
 * @param  count: Number of sectors to read (1..128)
 * @retval DRESULT: Operation result
 */
-DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
+DRESULT SD_read(void* pdata, BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
   uint32_t timeout;
@@ -281,7 +281,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 * @retval DRESULT: Operation result
 */
 #if _USE_WRITE == 1
-DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+DRESULT SD_write(void* pdata, BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
   uint32_t timeout;
@@ -393,7 +393,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 * @retval DRESULT: Operation result
 */
 #if _USE_IOCTL == 1
-DRESULT SD_ioctl(BYTE lun, BYTE cmd, void *buff)
+DRESULT SD_ioctl(void* pdata, BYTE lun, BYTE cmd, void *buff)
 {
   DRESULT res = RES_ERROR;
   BSP_SD_CardInfo CardInfo;

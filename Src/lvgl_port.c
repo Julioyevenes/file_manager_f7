@@ -71,8 +71,8 @@ static JPEG_HandleTypeDef 			lvgl_img_hjpeg;
 static JPEG_ConfTypeDef   			lvgl_img_jpeginfo;
 static jpeg_codec_handle_t 			lvgl_img_hjpegcodec;
 
-uint8_t 					husb_state;
 USBH_HandleTypeDef 			hUSBH;
+USBH_HandleTypeDef * 		pusb_hid = NULL;
 HID_MOUSE_Info_TypeDef * 	m_pinfo;
 
 lv_indev_t * enc_indev;
@@ -265,11 +265,11 @@ static bool lvgl_mouse_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data)
     static lv_coord_t last_x = 0;
     static lv_coord_t last_y = 0;
     static HID_MOUSE_Info_TypeDef last_m_pinfo;
-    USBH_HandleTypeDef * phost = &hUSBH;
+    USBH_HandleTypeDef * phost = pusb_hid;
     HID_HandleTypeDef * HID_Handle;
 
     /* Fill mouse struct */
-    if(husb_state == HOST_USER_CLASS_ACTIVE)
+    if(phost->gState == HOST_CLASS)
     {
         if(USBH_GetActiveClass(phost) == USB_HID_CLASS)
         {

@@ -31,6 +31,7 @@ Include(directories):	/STM32Cube_FW_F7_V1.16.0/Drivers/CMSIS/Include
 			/file_manager_f7/Libraries/audiolib/codecs/flaccodec/include
 			/file_manager_f7/Libraries/audiolib/codecs/flaccodec/libFLAC/include
 			/file_manager_f7/Libraries/STM32_USB_Host_Library/Class/HID/Inc
+			/file_manager_f7/Libraries/STM32_USB_Host_Library/Class/HUB/Inc
 			/file_manager_f7/Libraries/STM32_USB_Host_Library/Class/MSC/Inc
 			/file_manager_f7/Libraries/STM32_USB_Host_Library/Core/Inc
 			/file_manager_f7/Libraries/Utilities/JPEG	

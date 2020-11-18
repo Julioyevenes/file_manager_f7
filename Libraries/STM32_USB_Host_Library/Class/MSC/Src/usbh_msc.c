@@ -507,7 +507,10 @@ static USBH_StatusTypeDef USBH_MSC_Process(USBH_HandleTypeDef *phost)
         (void)osMessageQueuePut(phost->os_event, &phost->os_msg, 0U, NULL);
 #endif
 #endif
-        phost->pUser(phost, HOST_USER_CLASS_ACTIVE);
+        if (phost->pUser != NULL)
+        {
+          phost->pUser(phost, HOST_USER_CLASS_ACTIVE);
+        }
       }
       break;
 

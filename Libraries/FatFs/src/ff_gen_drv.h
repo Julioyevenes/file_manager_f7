@@ -64,13 +64,13 @@
 typedef struct
 {
   DSTATUS (*disk_initialize) (BYTE);                     /*!< Initialize Disk Drive                     */
-  DSTATUS (*disk_status)     (BYTE);                     /*!< Get Disk Status                           */
-  DRESULT (*disk_read)       (BYTE, BYTE*, DWORD, UINT);       /*!< Read Sector(s)                            */
+  DSTATUS (*disk_status)     (void*, BYTE);                     /*!< Get Disk Status                           */
+  DRESULT (*disk_read)       (void*, BYTE, BYTE*, DWORD, UINT);       /*!< Read Sector(s)                            */
 #if _USE_WRITE == 1 
-  DRESULT (*disk_write)      (BYTE, const BYTE*, DWORD, UINT); /*!< Write Sector(s) when _USE_WRITE = 0       */
+  DRESULT (*disk_write)      (void*, BYTE, const BYTE*, DWORD, UINT); /*!< Write Sector(s) when _USE_WRITE = 0       */
 #endif /* _USE_WRITE == 1 */
 #if _USE_IOCTL == 1  
-  DRESULT (*disk_ioctl)      (BYTE, BYTE, void*);              /*!< I/O control operation when _USE_IOCTL = 1 */
+  DRESULT (*disk_ioctl)      (void*, BYTE, BYTE, void*);              /*!< I/O control operation when _USE_IOCTL = 1 */
 #endif /* _USE_IOCTL == 1 */
 
 }Diskio_drvTypeDef;
@@ -84,16 +84,15 @@ typedef struct
   Diskio_drvTypeDef       *drv[_VOLUMES];
   uint8_t                 lun[_VOLUMES];
   __IO uint8_t            nbr;
-
+  void                    *pdata[_VOLUMES];
 }Disk_drvTypeDef;
 
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
-uint8_t FATFS_LinkDriverEx(Diskio_drvTypeDef *drv, char *path, uint8_t lun);
+uint8_t FATFS_LinkDriverEx(Diskio_drvTypeDef *drv, char *path, uint8_t lun, void *pdata);
 uint8_t FATFS_LinkDriver(Diskio_drvTypeDef *drv, char *path);
 uint8_t FATFS_UnLinkDriver(char *path);
-uint8_t FATFS_LinkDriverEx(Diskio_drvTypeDef *drv, char *path, BYTE lun);
 uint8_t FATFS_UnLinkDriverEx(char *path, BYTE lun);
 uint8_t FATFS_GetAttachedDriversNbr(void);
 

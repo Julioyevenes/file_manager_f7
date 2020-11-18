@@ -171,7 +171,7 @@ extern "C" {
 #define  USB_EP_DIR_MSK                                    0x80U
 
 #ifndef USBH_MAX_PIPES_NBR
-#define USBH_MAX_PIPES_NBR                                15U
+#define USBH_MAX_PIPES_NBR                                 15U
 #endif /* USBH_MAX_PIPES_NBR */
 
 #define USBH_DEVICE_ADDRESS_DEFAULT                        0x00U
@@ -460,10 +460,13 @@ typedef struct _USBH_HandleTypeDef
   USBH_ClassTypeDef    *pClass[USBH_MAX_NUM_SUPPORTED_CLASS];
   USBH_ClassTypeDef    *pActiveClass;
   uint32_t              ClassNumber;
-  uint32_t              Pipes[16];
+  uint32_t             *Pipes;
   __IO uint32_t         Timer;
   uint32_t              Timeout;
   uint8_t               id;
+  uint8_t 				valid;
+  uint8_t               address;
+  uint8_t               HubNbrPorts;
   void                 *pData;
   void (* pUser)(struct _USBH_HandleTypeDef *pHandle, uint8_t id);
 
@@ -477,6 +480,9 @@ typedef struct _USBH_HandleTypeDef
 #endif
   uint32_t              os_msg;
 #endif
+
+  struct _USBH_HandleTypeDef * parent;
+  struct _USBH_HandleTypeDef * childs;
 
 } USBH_HandleTypeDef;
 

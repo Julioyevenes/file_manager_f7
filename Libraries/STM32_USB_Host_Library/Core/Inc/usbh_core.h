@@ -109,6 +109,7 @@ USBH_StatusTypeDef  USBH_Process(USBH_HandleTypeDef *phost);
 USBH_StatusTypeDef  USBH_ReEnumerate(USBH_HandleTypeDef *phost);
 
 /* USBH Low Level Driver */
+USBH_StatusTypeDef   USBH_LL_SetupEP0(USBH_HandleTypeDef *phost);
 USBH_StatusTypeDef   USBH_LL_Init(USBH_HandleTypeDef *phost);
 USBH_StatusTypeDef   USBH_LL_DeInit(USBH_HandleTypeDef *phost);
 USBH_StatusTypeDef   USBH_LL_Start(USBH_HandleTypeDef *phost);

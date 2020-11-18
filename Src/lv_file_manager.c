@@ -36,6 +36,7 @@
 #include "usbh_core.h"
 #include "usbh_msc.h"
 #include "usbh_hid.h"
+#include "usbh_hub.h"
 
 #include <stdlib.h>
 
@@ -76,7 +77,8 @@ typedef enum
 
 typedef enum
 {
-	LV_FM_MEDIA_SD = 0,
+	LV_FM_NO_MEDIA = 0,
+	LV_FM_MEDIA_SD,
 	LV_FM_MEDIA_USB
 } lv_fm_media_hardware_t;
 
@@ -104,6 +106,8 @@ typedef struct
 	
 	FATFS 					fat_fs;
 	
+	USBH_HandleTypeDef *	husb;
+
 	char					path[4];
 } lv_fm_media_t;
 
@@ -150,7 +154,7 @@ typedef struct
 
 /* Private constants --------------------------------------------------------*/
 #define LV_FM_MAX_ELEMENTS 	100
-#define LV_FM_MAX_VOLUMES 	2
+#define LV_FM_MAX_VOLUMES 	5
 
 const char * str_vol_opt[] = {	LV_SYMBOL_DRIVE, "Format",
 								LV_SYMBOL_CLOSE, "Cancel",
@@ -187,8 +191,8 @@ const char * btns01[] = {"Cancel", "Ok", ""};
 /* Private variables --------------------------------------------------------*/
 char lfn_buffer[255];
 
-extern uint8_t husb_state;
 extern USBH_HandleTypeDef hUSBH;
+extern USBH_HandleTypeDef * pusb_hid;
 
 lv_fm_obj_t fm_obj_save;
 lv_fm_obj_t fm_obj[LV_FM_MAX_ELEMENTS];
@@ -229,8 +233,6 @@ static void 			lv_fm_mbox_err_btn_event_cb(lv_obj_t * btn, lv_event_t e);
 static void 			lv_fm_img_event_cb(lv_obj_t * obj, lv_event_t e);
 static void 			lv_fm_kb_event_cb(lv_obj_t * _kb, lv_event_t e);
 
-static void 			lv_fm_usb_cb(USBH_HandleTypeDef * phost, uint8_t id);
-
 static void 			lv_fm_err(lv_fm_err_t err);
 static uint8_t 			lv_fm_media_detect(lv_fm_media_t * m);
 static void 			lv_fm_media_check(lv_fm_media_t * m);
@@ -262,19 +264,16 @@ void lv_fm_init(void)
 
 	fm_media[0].media_hard = LV_FM_MEDIA_SD;
 	fm_media[0].drv = (Diskio_drvTypeDef *) &SD_Driver;
+	FATFS_LinkDriver(fm_media[0].drv, &(fm_media[0].path[0]));
 
-	USBH_Init(&hUSBH, lv_fm_usb_cb, 0);
-	USBH_RegisterClass(&hUSBH, USBH_MSC_CLASS);
-	USBH_RegisterClass(&hUSBH, USBH_HID_CLASS);
+	hUSBH.address = 0xFF;
+	hUSBH.Pipes   = USBH_malloc(sizeof(uint32_t) * USBH_MAX_PIPES_NBR);
+
+	USBH_Init(&hUSBH, 0, 0);
+	USBH_RegisterClass(&hUSBH, &USBH_msc);
+	USBH_RegisterClass(&hUSBH, &HID_Class);
+	USBH_RegisterClass(&hUSBH, &HUB_Class);
 	USBH_Start(&hUSBH);
-
-	fm_media[1].media_hard = LV_FM_MEDIA_USB;
-	fm_media[1].drv = (Diskio_drvTypeDef *) &USBH_Driver;
-
-    for (i = 0; i < LV_FM_MAX_VOLUMES; i++)
-    {
-        FATFS_LinkDriver(fm_media[i].drv, &(fm_media[i].path[0]));
-    }
 
     g = lv_group_create();
     lv_indev_set_group(enc_indev, g);
@@ -287,7 +286,49 @@ void lv_fm_init(void)
 
 void lv_fm_non_task_process(void)
 {
-	USBH_Process(&hUSBH);
+	USBH_HandleTypeDef * pusb = HUB_Process(&hUSBH);
+	lv_fm_media_t * m = (lv_fm_media_t *) &fm_media;
+	uint8_t idx;
+
+	if(USBH_GetActiveClass(pusb) == USB_HID_CLASS)
+	{
+		if(pusb_hid == NULL)
+		{
+			pusb_hid = pusb;
+			pusb_hid->valid = 1;
+		}
+	}
+	else if(USBH_GetActiveClass(pusb) == USB_MSC_CLASS)
+	{
+		idx = pusb->address == 0xFF ? 1 : pusb->address;
+
+		if(m[idx].husb == NULL)
+		{
+			m[idx].media_hard = LV_FM_MEDIA_USB;
+			m[idx].drv = (Diskio_drvTypeDef *) &USBH_Driver;
+			m[idx].husb = pusb;
+			m[idx].husb->valid = 1;
+
+			FATFS_LinkDriverEx(m[idx].drv, &(m[idx].path[0]), 0, m[idx].husb);
+		}
+	}
+
+	for(idx = 1; idx < LV_FM_MAX_VOLUMES; idx++)
+	{
+		if(m[idx].valid == 0 && \
+		   m[idx].husb != NULL && \
+		   m[idx].husb->valid == 0)
+		{
+			FATFS_UnLinkDriver(&(m[idx].path[0]));
+
+			memset(&m[idx], 0, sizeof(lv_fm_media_t));
+		}
+	}
+
+	if(pusb_hid->valid == 0)
+	{
+		pusb_hid = NULL;
+	}
 }
 
 static void lv_fm_local_tab_create(lv_obj_t * parent)
@@ -653,11 +694,6 @@ static void lv_fm_kb_event_cb(lv_obj_t * _kb, lv_event_t e)
     }
 }
 
-static void lv_fm_usb_cb(USBH_HandleTypeDef * phost, uint8_t id)
-{
-	husb_state = id;
-}
-
 static void lv_fm_err(lv_fm_err_t err)
 {
 	mbox_err = lv_fm_mbox_create(lv_scr_act(),
@@ -705,9 +741,11 @@ static uint8_t lv_fm_media_detect(lv_fm_media_t * m)
 			return BSP_SD_IsDetected();
 
 		case LV_FM_MEDIA_USB:
-			if(USBH_GetActiveClass(&hUSBH) == USB_MSC_CLASS)
+			if(m->husb != NULL && \
+			   m->husb->valid == 1 && \
+			   USBH_GetActiveClass(m->husb) == USB_MSC_CLASS)
 			{
-				return !m->drv->disk_status(m->lun);
+				return !m->drv->disk_status(m->husb, m->lun);
 			}
 			else
 			{
@@ -733,6 +771,11 @@ static void lv_fm_media_check(lv_fm_media_t * m)
 		{
 			if(media_present_now)
 			{
+				if(tm->media_hard == LV_FM_MEDIA_SD)
+				{
+					NVIC_DisableIRQ(OTG_HS_IRQn);
+				}
+
 				if( tm->drv->disk_initialize(tm->lun) != STA_NOINIT )
 				{
 					if( f_mount(&(tm->fat_fs), (TCHAR const*)tm->path, 1) == FR_OK )
@@ -748,6 +791,11 @@ static void lv_fm_media_check(lv_fm_media_t * m)
 				else
 				{
 					tm->media_present = 0;
+				}
+
+				if(tm->media_hard == LV_FM_MEDIA_SD)
+				{
+					NVIC_EnableIRQ(OTG_HS_IRQn);
 				}
 			}
 			else
@@ -1385,12 +1433,6 @@ static void lv_fm_file_task_kill(lv_fm_task_data_t * data, lv_fm_err_t err)
 void lv_fm_media_task(lv_task_t * task)
 {
 	lv_fm_media_t * m = task->user_data;
-
-	if(hUSBH.device.is_connected == 1 && \
-	   husb_state != HOST_USER_CLASS_ACTIVE)
-	{
-		return;
-	}
 
 	lv_fm_media_check(m);
 }

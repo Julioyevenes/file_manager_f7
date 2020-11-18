@@ -20,7 +20,7 @@
 #include "usbh_core.h"
 #include "usbh_msc.h"
 /* hUSBH to be updated with the USBH handle defined in the application code */
-#define  HOST_HANDLE   hUSBH
+/* #define  HOST_HANDLE   hUSBH */
 
 /*---------------------------------------------------------------------------/
 / Functions and Buffer Configurations
@@ -178,7 +178,7 @@
 / Drive/Volume Configurations
 /---------------------------------------------------------------------------*/
 
-#define _VOLUMES                2
+#define _VOLUMES                5
 /* Number of volumes (logical drives) to be used. */
 
 

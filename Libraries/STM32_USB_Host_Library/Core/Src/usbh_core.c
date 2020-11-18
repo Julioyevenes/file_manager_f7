@@ -207,10 +207,7 @@ static USBH_StatusTypeDef DeInitStateMachine(USBH_HandleTypeDef *phost)
   uint32_t i = 0U;
 
   /* Clear Pipes flags*/
-  for (i = 0U; i < USBH_MAX_PIPES_NBR; i++)
-  {
-    phost->Pipes[i] = 0U;
-  }
+  memset(phost->Pipes, 0, sizeof(uint32_t) * USBH_MAX_PIPES_NBR);
 
   for (i = 0U; i < USBH_MAX_DATA_BUFFER; i++)
   {
@@ -456,7 +453,7 @@ USBH_StatusTypeDef USBH_ReEnumerate(USBH_HandleTypeDef *phost)
   */
 USBH_StatusTypeDef  USBH_Process(USBH_HandleTypeDef *phost)
 {
-  __IO USBH_StatusTypeDef status = USBH_FAIL;
+  __IO USBH_StatusTypeDef status = USBH_OK;
   uint8_t idx = 0U;
 
   /* check for Host pending port disconnect event */
@@ -477,10 +474,6 @@ USBH_StatusTypeDef  USBH_Process(USBH_HandleTypeDef *phost)
         phost->gState = HOST_DEV_WAIT_FOR_ATTACHMENT;
         USBH_Delay(200U);
         USBH_LL_ResetPort(phost);
-
-        /* Make sure to start with Default address */
-        phost->device.address = USBH_ADDRESS_DEFAULT;
-        phost->Timeout = 0U;
 
 #if (USBH_USE_OS == 1U)
         phost->os_msg = (uint32_t)USBH_PORT_EVENT;
@@ -690,7 +683,10 @@ USBH_StatusTypeDef  USBH_Process(USBH_HandleTypeDef *phost)
             USBH_UsrLog("%s class started.", phost->pActiveClass->Name);
 
             /* Inform user that a class has been activated */
-            phost->pUser(phost, HOST_USER_CLASS_SELECTED);
+            if (phost->pUser != NULL)
+            {
+              phost->pUser(phost, HOST_USER_CLASS_SELECTED);
+            }
           }
           else
           {
@@ -754,11 +750,30 @@ USBH_StatusTypeDef  USBH_Process(USBH_HandleTypeDef *phost)
       /* process class state machine */
       if (phost->pActiveClass != NULL)
       {
-        phost->pActiveClass->BgndProcess(phost);
+    	status = phost->pActiveClass->BgndProcess(phost);
       }
       break;
 
     case HOST_DEV_DISCONNECTED :
+	  if(USBH_GetActiveClass(phost) == 0x09U)
+	  {
+		USBH_HandleTypeDef * husb = phost->childs;
+
+		for(uint8_t port = 0; port < phost->HubNbrPorts; port++)
+		{
+		  if(husb[port].valid)
+		  {
+			if(husb[port].pActiveClass != NULL)
+			{
+			  husb[port].pActiveClass->DeInit(&husb[port]);
+			  husb[port].pActiveClass = NULL;
+			}
+
+			husb[port].valid = 0;
+		  }
+		}
+	  }
+
       phost->device.is_disconnected = 0U;
 
       DeInitStateMachine(phost);
@@ -766,7 +781,7 @@ USBH_StatusTypeDef  USBH_Process(USBH_HandleTypeDef *phost)
       /* Re-Initilaize Host for new Enumeration */
       if (phost->pActiveClass != NULL)
       {
-        phost->pActiveClass->DeInit(phost);
+    	status = phost->pActiveClass->DeInit(phost);
         phost->pActiveClass = NULL;
       }
 
@@ -803,7 +818,7 @@ USBH_StatusTypeDef  USBH_Process(USBH_HandleTypeDef *phost)
     default :
       break;
   }
-  return USBH_OK;
+  return status;
 }
 
 
@@ -904,11 +919,11 @@ static USBH_StatusTypeDef USBH_HandleEnum(USBH_HandleTypeDef *phost)
 
     case ENUM_SET_ADDR:
       /* set address */
-      ReqStatus = USBH_SetAddress(phost, USBH_DEVICE_ADDRESS);
+      ReqStatus = USBH_SetAddress(phost, phost->address);
       if (ReqStatus == USBH_OK)
       {
         USBH_Delay(2U);
-        phost->device.address = USBH_DEVICE_ADDRESS;
+        phost->device.address = phost->address;
 
         /* user callback for device address assigned */
         USBH_UsrLog("Address (#%d) assigned.", phost->device.address);
@@ -1269,23 +1284,34 @@ USBH_StatusTypeDef  USBH_LL_Connect(USBH_HandleTypeDef *phost)
   */
 USBH_StatusTypeDef  USBH_LL_Disconnect(USBH_HandleTypeDef *phost)
 {
+  USBH_HandleTypeDef * husb;
+
+  if(phost->parent != NULL)
+  {
+	husb = phost->parent;
+  }
+  else
+  {
+	husb = phost;
+  }
+
   /* update device connection states */
-  phost->device.is_disconnected = 1U;
-  phost->device.is_connected = 0U;
-  phost->device.PortEnabled = 0U;
+  husb->device.is_disconnected = 1U;
+  husb->device.is_connected = 0U;
+  husb->device.PortEnabled = 0U;
 
   /* Stop Host */
-  USBH_LL_Stop(phost);
+  USBH_LL_Stop(husb);
 
   /* FRee Control Pipes */
-  USBH_FreePipe(phost, phost->Control.pipe_in);
-  USBH_FreePipe(phost, phost->Control.pipe_out);
+  USBH_FreePipe(husb, husb->Control.pipe_in);
+  USBH_FreePipe(husb, husb->Control.pipe_out);
 #if (USBH_USE_OS == 1U)
-  phost->os_msg = (uint32_t)USBH_PORT_EVENT;
+  husb->os_msg = (uint32_t)USBH_PORT_EVENT;
 #if (osCMSIS < 0x20000U)
-  (void)osMessagePut(phost->os_event, phost->os_msg, 0U);
+  (void)osMessagePut(husb->os_event, husb->os_msg, 0U);
 #else
-  (void)osMessageQueuePut(phost->os_event, &phost->os_msg, 0U, NULL);
+  (void)osMessageQueuePut(husb->os_event, &husb->os_msg, 0U, NULL);
 #endif
 #endif
 

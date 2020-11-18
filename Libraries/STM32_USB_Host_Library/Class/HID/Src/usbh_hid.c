@@ -341,7 +341,10 @@ static USBH_StatusTypeDef USBH_HID_ClassRequest(USBH_HandleTypeDef *phost)
       HID_Handle->ctl_state = HID_REQ_IDLE;
 
       /* all requests performed*/
-      phost->pUser(phost, HOST_USER_CLASS_ACTIVE);
+      if (phost->pUser != NULL)
+      {
+        phost->pUser(phost, HOST_USER_CLASS_ACTIVE);
+      }
       status = USBH_OK;
     }
     else if (classReqStatus == USBH_NOT_SUPPORTED)

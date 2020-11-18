@@ -51,7 +51,6 @@
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-extern USBH_HandleTypeDef  HOST_HANDLE;
 #if _USE_BUFF_WO_ALIGNMENT == 0
 /* Local buffer use to handle buffer not aligned 32bits*/
 static DWORD scratch[_MAX_SS / 4];
@@ -59,15 +58,15 @@ static DWORD scratch[_MAX_SS / 4];
 
 /* Private function prototypes -----------------------------------------------*/
 DSTATUS USBH_initialize (BYTE);
-DSTATUS USBH_status (BYTE);
-DRESULT USBH_read (BYTE, BYTE*, DWORD, UINT);
+DSTATUS USBH_status (void*, BYTE);
+DRESULT USBH_read (void*, BYTE, BYTE*, DWORD, UINT);
 
 #if _USE_WRITE == 1
-  DRESULT USBH_write (BYTE, const BYTE*, DWORD, UINT);
+  DRESULT USBH_write (void*, BYTE, const BYTE*, DWORD, UINT);
 #endif /* _USE_WRITE == 1 */
 
 #if _USE_IOCTL == 1
-  DRESULT USBH_ioctl (BYTE, BYTE, void*);
+  DRESULT USBH_ioctl (void*, BYTE, BYTE, void*);
 #endif /* _USE_IOCTL == 1 */
   
 const Diskio_drvTypeDef  USBH_Driver =
@@ -100,11 +99,12 @@ DSTATUS USBH_initialize(BYTE lun)
   * @param  lun : lun id
   * @retval DSTATUS: Operation status
   */
-DSTATUS USBH_status(BYTE lun)
+DSTATUS USBH_status(void* pdata, BYTE lun)
 {
   DRESULT res = RES_ERROR;
+  USBH_HandleTypeDef * pusb = (USBH_HandleTypeDef *) pdata;
   
-  if(USBH_MSC_UnitIsReady(&HOST_HANDLE, lun))
+  if(USBH_MSC_UnitIsReady(pusb, lun))
   {
     res = RES_OK;
   }
@@ -124,18 +124,19 @@ DSTATUS USBH_status(BYTE lun)
   * @param  count: Number of sectors to read (1..128)
   * @retval DRESULT: Operation result
   */
-DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
+DRESULT USBH_read(void* pdata, BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
   MSC_LUNTypeDef info;
   USBH_StatusTypeDef  status = USBH_OK;
+  USBH_HandleTypeDef * pusb = (USBH_HandleTypeDef *) pdata;
 
   if ((DWORD)buff & 3) /* DMA Alignment issue, do single up to aligned buffer */
   {
 #if _USE_BUFF_WO_ALIGNMENT == 0
     while ((count--)&&(status == USBH_OK))
     {
-      status = USBH_MSC_Read(&HOST_HANDLE, lun, sector + count, (uint8_t *)scratch, 1);
+      status = USBH_MSC_Read(pusb, lun, sector + count, (uint8_t *)scratch, 1);
       if(status == USBH_OK)
       {
         memcpy (&buff[count * _MAX_SS] ,scratch, _MAX_SS);
@@ -151,7 +152,7 @@ DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   }
   else
   {
-    status = USBH_MSC_Read(&HOST_HANDLE, lun, sector, buff, count);
+    status = USBH_MSC_Read(pusb, lun, sector, buff, count);
   }
   
   if(status == USBH_OK)
@@ -160,7 +161,7 @@ DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   }
   else
   {
-    USBH_MSC_GetLUNInfo(&HOST_HANDLE, lun, &info); 
+    USBH_MSC_GetLUNInfo(pusb, lun, &info);
     
     switch (info.sense.asc)
     {
@@ -189,11 +190,12 @@ DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   * @retval DRESULT: Operation result
   */
 #if _USE_WRITE == 1
-DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+DRESULT USBH_write(void* pdata, BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR; 
   MSC_LUNTypeDef info;
-  USBH_StatusTypeDef  status = USBH_OK;  
+  USBH_StatusTypeDef  status = USBH_OK;
+  USBH_HandleTypeDef * pusb = (USBH_HandleTypeDef *) pdata;
 
   if ((DWORD)buff & 3) /* DMA Alignment issue, do single up to aligned buffer */
   {
@@ -202,7 +204,7 @@ DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
     {
       memcpy (scratch, &buff[count * _MAX_SS], _MAX_SS);
       
-      status = USBH_MSC_Write(&HOST_HANDLE, lun, sector + count, (BYTE *)scratch, 1) ;
+      status = USBH_MSC_Write(pusb, lun, sector + count, (BYTE *)scratch, 1) ;
       if(status == USBH_FAIL)
       {
         break;
@@ -214,7 +216,7 @@ DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   }
   else
   {
-    status = USBH_MSC_Write(&HOST_HANDLE, lun, sector, (BYTE *)buff, count);
+    status = USBH_MSC_Write(pusb, lun, sector, (BYTE *)buff, count);
   }
   
   if(status == USBH_OK)
@@ -223,7 +225,7 @@ DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   }
   else
   {
-    USBH_MSC_GetLUNInfo(&HOST_HANDLE, lun, &info); 
+    USBH_MSC_GetLUNInfo(pusb, lun, &info);
     
     switch (info.sense.asc)
     {
@@ -257,10 +259,11 @@ DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   * @retval DRESULT: Operation result
   */
 #if _USE_IOCTL == 1
-DRESULT USBH_ioctl(BYTE lun, BYTE cmd, void *buff)
+DRESULT USBH_ioctl(void* pdata, BYTE lun, BYTE cmd, void *buff)
 {
   DRESULT res = RES_ERROR;
   MSC_LUNTypeDef info;
+  USBH_HandleTypeDef * pusb = (USBH_HandleTypeDef *) pdata;
   
   switch (cmd)
   {
@@ -271,7 +274,7 @@ DRESULT USBH_ioctl(BYTE lun, BYTE cmd, void *buff)
     
   /* Get number of sectors on the disk (DWORD) */  
   case GET_SECTOR_COUNT : 
-    if(USBH_MSC_GetLUNInfo(&HOST_HANDLE, lun, &info) == USBH_OK)
+    if(USBH_MSC_GetLUNInfo(pusb, lun, &info) == USBH_OK)
     {
       *(DWORD*)buff = info.capacity.block_nbr;
       res = RES_OK;
@@ -284,7 +287,7 @@ DRESULT USBH_ioctl(BYTE lun, BYTE cmd, void *buff)
     
   /* Get R/W sector size (WORD) */  
   case GET_SECTOR_SIZE :	
-    if(USBH_MSC_GetLUNInfo(&HOST_HANDLE, lun, &info) == USBH_OK)
+    if(USBH_MSC_GetLUNInfo(pusb, lun, &info) == USBH_OK)
     {
       *(DWORD*)buff = info.capacity.block_size;
       res = RES_OK;
@@ -298,7 +301,7 @@ DRESULT USBH_ioctl(BYTE lun, BYTE cmd, void *buff)
     /* Get erase block size in unit of sector (DWORD) */ 
   case GET_BLOCK_SIZE : 
     
-    if(USBH_MSC_GetLUNInfo(&HOST_HANDLE, lun, &info) == USBH_OK)
+    if(USBH_MSC_GetLUNInfo(pusb, lun, &info) == USBH_OK)
     {
       *(DWORD*)buff = info.capacity.block_size;
       res = RES_OK;

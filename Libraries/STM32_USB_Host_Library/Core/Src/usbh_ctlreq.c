@@ -960,7 +960,10 @@ static USBH_StatusTypeDef USBH_HandleControl(USBH_HandleTypeDef *phost)
       }
       else
       {
-        phost->pUser(phost, HOST_USER_UNRECOVERED_ERROR);
+    	if (phost->pUser != NULL)
+    	{
+          phost->pUser(phost, HOST_USER_UNRECOVERED_ERROR);
+    	}
         phost->Control.errorcount = 0U;
         USBH_ErrLog("Control error: Device not responding");
 

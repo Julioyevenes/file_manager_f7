@@ -78,7 +78,7 @@ DSTATUS disk_status (
 {
   DSTATUS stat;
   
-  stat = disk.drv[pdrv]->disk_status(disk.lun[pdrv]);
+  stat = disk.drv[pdrv]->disk_status(disk.pdata[pdrv], disk.lun[pdrv]);
   return stat;
 }
 
@@ -118,7 +118,7 @@ DRESULT disk_read (
 {
   DRESULT res;
  
-  res = disk.drv[pdrv]->disk_read(disk.lun[pdrv], buff, sector, count);
+  res = disk.drv[pdrv]->disk_read(disk.pdata[pdrv], disk.lun[pdrv], buff, sector, count);
   return res;
 }
 
@@ -140,7 +140,7 @@ DRESULT disk_write (
 {
   DRESULT res;
   
-  res = disk.drv[pdrv]->disk_write(disk.lun[pdrv], buff, sector, count);
+  res = disk.drv[pdrv]->disk_write(disk.pdata[pdrv], disk.lun[pdrv], buff, sector, count);
   return res;
 }
 #endif /* _USE_WRITE == 1 */
@@ -161,7 +161,7 @@ DRESULT disk_ioctl (
 {
   DRESULT res;
 
-  res = disk.drv[pdrv]->disk_ioctl(disk.lun[pdrv], cmd, buff);
+  res = disk.drv[pdrv]->disk_ioctl(disk.pdata[pdrv], disk.lun[pdrv], cmd, buff);
   return res;
 }
 #endif /* _USE_IOCTL == 1 */

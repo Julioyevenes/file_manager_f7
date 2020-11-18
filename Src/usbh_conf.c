@@ -566,4 +566,32 @@ void USBH_Delay(uint32_t Delay)
 #endif  
 }
 
+/**
+  * @brief  USBH_LL_SetupEP0
+  *         Setup endpoint with selected device info
+  * @param  phost: Host handle
+  * @retval Status
+  */
+USBH_StatusTypeDef USBH_LL_SetupEP0(USBH_HandleTypeDef *phost)
+{
+  HCD_HandleTypeDef *ph =  &hhcd;
+
+  __HAL_LOCK(ph);
+
+  ph->hc[phost->Control.pipe_out].dev_addr   = phost->device.address;
+  ph->hc[phost->Control.pipe_out].max_packet = phost->Control.pipe_size;
+  ph->hc[phost->Control.pipe_out].speed      = phost->device.speed;
+
+  ph->hc[phost->Control.pipe_in].dev_addr    = phost->device.address;
+  ph->hc[phost->Control.pipe_in].max_packet  = phost->Control.pipe_size;
+  ph->hc[phost->Control.pipe_in].speed       = phost->device.speed;
+
+  ph->pData = phost;
+  phost->pData = ph;
+
+  __HAL_UNLOCK(ph);
+
+  return USBH_OK;
+}
+
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
