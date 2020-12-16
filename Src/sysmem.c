@@ -37,22 +37,26 @@ register char * stack_ptr asm("sp");
 **/
 caddr_t _sbrk(int incr)
 {
-	extern char end asm("end");
-	static char *heap_end;
-	char *prev_heap_end;
+  extern char __heap_start asm("__heap_start"); /* Defined by the linker. */
+  extern char __heap_limit asm("__heap_limit"); /* Defined by the linker. */
 
-	if (heap_end == 0)
-		heap_end = &end;
+  static char *heap_end;
+    static char *heap_limit = &__heap_limit;
 
-	prev_heap_end = heap_end;
-	if (heap_end + incr > stack_ptr)
-	{
-		errno = ENOMEM;
-		return (caddr_t) -1;
-	}
+  char *prev_heap_end;
 
-	heap_end += incr;
+  if (heap_end == 0)
+    heap_end = &__heap_start;
 
-	return (caddr_t) prev_heap_end;
+  prev_heap_end = heap_end;
+  if (heap_end + incr > heap_limit)
+  {
+    errno = ENOMEM;
+    return (caddr_t) -1;
+  }
+
+  heap_end += incr;
+
+  return (caddr_t) prev_heap_end;
 }
 
