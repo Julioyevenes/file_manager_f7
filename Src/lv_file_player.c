@@ -27,9 +27,14 @@
 /* Includes ------------------------------------------------------------------*/
 #include "lv_file_player.h"
 
+#include "lvgl_port.h"
+#include "stm32f769i_discovery_audio.h"
+#include "stm32f769i_discovery_lcd.h"
+
 #include "wav_lib.h"
 #include "mp3_lib.h"
 #include "flac_lib.h"
+#include "jmv_lib.h"
 
 /* Private types -------------------------------------------------------------*/
 /* Private constants ---------------------------------------------------------*/
@@ -51,6 +56,8 @@
 									}
 
 /* Private variables ---------------------------------------------------------*/
+lv_fm_player_format_t player_format;
+
 audio_lib_handle_t hlib;
 audio_lib_t * audio_lib;
 
@@ -60,6 +67,9 @@ lv_task_t * player_volume_task;
 
 lv_obj_t * player_h;
 lv_obj_t * player_bar;
+lv_obj_t * player_img;
+
+lv_img_dsc_t img_dsc;
 
 uint8_t last_volume;
 
@@ -77,6 +87,19 @@ void 		lv_fm_player_volume_task(lv_task_t * task);
 
 audio_lib_err_t lv_fm_player_start(lv_obj_t * parent, lv_fm_player_format_t format, FIL * fp)
 {
+	uint32_t offset;
+	
+	player_format = format;
+
+    /* Set image raw data address */
+#if LV_COLOR_DEPTH == 16
+    offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * 2;
+#else
+    offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * 4;
+#endif
+    hlib.img.ptr = (uint8_t *) (LCD_FB_START_ADDRESS + offset);
+    hlib.img.codec = &lvgl_img_hjpeg;
+	
 	hlib.active = 1;
 	hlib.volume = 50;
 	hlib.fp = fp;
@@ -95,6 +118,10 @@ audio_lib_err_t lv_fm_player_start(lv_obj_t * parent, lv_fm_player_format_t form
 		case player_flac:
 			audio_lib = &flac_lib;
 			break;
+			
+		case player_jmv:
+			audio_lib = &jmv_lib;
+			break;			
 
 		default:
 			audio_lib = NULL;
@@ -129,6 +156,23 @@ static void lv_fm_player_create(lv_obj_t * parent)
 {
 	lv_obj_t * btn;
 	lv_obj_t * img;
+	
+	if(player_format == player_jmv)
+    {
+        player_img = lv_img_create(lv_scr_act(), NULL);
+        img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR;
+        img_dsc.header.w = hlib.img.width;
+        img_dsc.header.h = hlib.img.height;
+#if LV_COLOR_DEPTH == 16
+        img_dsc.data_size = hlib.img.width * hlib.img.height * 2;
+#else
+        img_dsc.data_size = hlib.img.width * hlib.img.height * 4;
+#endif
+        img_dsc.data = hlib.img.ptr;
+        lv_img_set_src(player_img, &img_dsc);
+        lv_obj_set_drag(player_img, true);
+        lv_obj_align(player_img, lv_scr_act(), LV_ALIGN_CENTER, 0, 0);
+    }
 	
 	player_h = lv_cont_create(parent, NULL);
 	lv_cont_set_layout(player_h, LV_LAYOUT_PRETTY_TOP);
@@ -166,6 +210,7 @@ static void lv_fm_player_delete(void)
 	LV_FM_PLAYER_TASK_DEL(player_volume_task)
 	LV_FM_PLAYER_TASK_DEL(player_bar_task)
 	LV_FM_PLAYER_TASK_DEL(player_process_task)
+	LV_FM_PLAYER_OBJ_DEL(player_img)
 	LV_FM_PLAYER_OBJ_DEL(player_h)
 }
 
@@ -209,8 +254,14 @@ static void lv_fm_player_slider_event_cb(lv_obj_t * slider, lv_event_t e)
 void lv_fm_player_process_task(lv_task_t * task)
 {
 	audio_lib_handle_t * hlib = task->user_data;
-	
+
 	audio_lib->lib_process(hlib);
+
+	if(player_format == player_jmv)
+    {
+        lv_obj_invalidate(player_img);
+    }
+
 	if(hlib->err != AUDIO_LIB_NO_ERROR)
 	{
 		lv_fm_player_delete();

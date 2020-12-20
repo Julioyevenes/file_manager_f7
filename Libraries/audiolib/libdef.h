@@ -90,6 +90,16 @@ typedef struct
 
 typedef struct
 {
+    uint8_t *                   ptr;
+
+    uint16_t                    width;
+    uint16_t                    height;
+
+    void *                      codec;
+} audio_lib_img_t;
+
+typedef struct
+{
 	uint8_t 					active : 1;
 	uint8_t 					volume;
 	
@@ -101,6 +111,7 @@ typedef struct
 	audio_lib_buffer_t *		buffer;
 	audio_lib_playback_state_t 	playback_state;
 	audio_lib_time_t			time;
+	audio_lib_img_t             img;
 } audio_lib_handle_t;
 
 typedef struct

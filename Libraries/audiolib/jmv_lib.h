@@ -25,29 +25,23 @@
   */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __LVGL_PORT_H
-#define __LVGL_PORT_H
+#ifndef __JMV_LIB_H
+#define __JMV_LIB_H
 
 #ifdef __cplusplus
  extern "C" {
 #endif 
 
 /* Includes ------------------------------------------------------------------*/
-#include "hal_jpeg_codec.h"
-
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported variables --------------------------------------------------------*/
-extern JPEG_HandleTypeDef lvgl_img_hjpeg;
-
-/* Exported functions ------------------------------------------------------- */
-void lvgl_disp_init(void);
-void lvgl_indev_init(void);
-void lvgl_img_decoder_init(void);
+/* Exported functions --------------------------------------------------------*/
+extern audio_lib_t jmv_lib;
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __LVGL_PORT_H */
+#endif /* __JMV_LIB_H */

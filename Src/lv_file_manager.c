@@ -420,7 +420,8 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 			}
 			else if(tobj->format == wav || \
 					tobj->format == mp3 || \
-					tobj->format == flac)
+					tobj->format == flac || \
+					tobj->format == jmv)
 			{
 				if (list_options == NULL && \
 					player_h == NULL && \
@@ -448,6 +449,7 @@ static void lv_fm_list_local_btn_event_cb(lv_obj_t * btn, lv_event_t e)
 					img = lv_img_create(lv_scr_act(), NULL);
 					lv_img_set_src(img, tobj->name);
 					lv_obj_set_drag(img, true);
+					lv_obj_align(img, lv_scr_act(), LV_ALIGN_CENTER, 0, 0);
 					lv_obj_set_event_cb(img, lv_fm_img_event_cb);
 
 		    		if(lv_obj_get_width(img) == 0 || lv_obj_get_height(img) == 0)

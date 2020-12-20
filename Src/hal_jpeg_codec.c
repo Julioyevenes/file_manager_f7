@@ -26,61 +26,96 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "hal_jpeg_codec.h"
+#include "diskio.h"
 
 /* Private types -------------------------------------------------------------*/
 /* Private constants ---------------------------------------------------------*/
 #define JPEG_CODEC_SIZE_IN  4096
-#define JPEG_CODEC_SIZE_OUT 768
+#define JPEG_CODEC_SIZE_OUT (768 * 4)
 
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
+static uint8_t jpeg_inbuff[JPEG_CODEC_SIZE_IN * 2];
+static uint8_t jpeg_outbuff[JPEG_CODEC_SIZE_OUT * 2];
 static jpeg_codec_handle_t * hjpegcodec;
 
 /* Private function prototypes -----------------------------------------------*/
 
-jpeg_codec_err_t jpeg_decoder_init(jpeg_codec_handle_t * hcodec, JPEG_HandleTypeDef * hjpeg, FIL * fp, uint32_t dst_addr)
+jpeg_codec_err_t jpeg_decoder_init(jpeg_codec_handle_t * hcodec, JPEG_HandleTypeDef * hjpeg, FIL * fp, uint8_t * src_addr, uint8_t * dst_addr)
 {
-    uint8_t * ptr;
-
     hjpegcodec = hcodec;
-    memset(hcodec, 0, sizeof(jpeg_codec_handle_t));
 
-    hcodec->frame_addr = (uint8_t *) dst_addr;
+    hcodec->frame_addr = dst_addr;
     hcodec->fp = fp;
     hcodec->hjpeg = hjpeg;
+	
+	if(src_addr != NULL) /* User jpeg source buffer */
+	{
+		hcodec->in_buf[0].ptr = src_addr;
 
-    ptr = (uint8_t *) malloc((JPEG_CODEC_SIZE_IN + JPEG_CODEC_SIZE_OUT) * 2);
-    if(ptr == NULL)
-    {
-        return JPEG_CODEC_MEMORY_ERROR;
-    }
-    hcodec->in_buf[0].ptr = ptr;
-    hcodec->in_buf[1].ptr = ptr + JPEG_CODEC_SIZE_IN;
-    hcodec->out_buf[0].ptr = ptr + (JPEG_CODEC_SIZE_IN * 2);
-    hcodec->out_buf[1].ptr = ptr + (JPEG_CODEC_SIZE_IN * 2) + JPEG_CODEC_SIZE_OUT;
+		hcodec->out_buf[0].ptr = (uint8_t *) &jpeg_outbuff;
+		hcodec->out_buf[1].ptr = ((uint8_t *) &jpeg_outbuff) + JPEG_CODEC_SIZE_OUT;
+	}
+	else /* Internal jpeg source buffer */
+	{
+		hcodec->in_buf[0].ptr = (uint8_t *) &jpeg_inbuff;
+		hcodec->in_buf[1].ptr = ((uint8_t *) &jpeg_inbuff) + JPEG_CODEC_SIZE_IN;
+        hcodec->out_buf[0].ptr = (uint8_t *) &jpeg_outbuff;
+        hcodec->out_buf[1].ptr = ((uint8_t *) &jpeg_outbuff) + JPEG_CODEC_SIZE_OUT;
+	}
 
     return JPEG_CODEC_NO_ERROR;
 }
 
-jpeg_codec_err_t jpeg_decoder_start(jpeg_codec_handle_t * hcodec)
+jpeg_codec_err_t jpeg_decoder_start(jpeg_codec_handle_t * hcodec, uint32_t src_size)
 {
     uint32_t i;
 
-    /* Read from JPG file and fill input buffers */
+    hcodec->in_read_idx = hcodec->in_write_idx = 0;
+    hcodec->out_read_idx = hcodec->out_write_idx = 0;
+    hcodec->in_pause = hcodec->out_pause = 0;
+    hcodec->mcu_total = hcodec->mcu_value = 0;
+
     for(i = 0; i < 2; i++)
     {
-        if(f_read (hcodec->fp, 
-                   hcodec->in_buf[i].ptr, 
-                   JPEG_CODEC_SIZE_IN, 
-                   (UINT *)(&hcodec->in_buf[i].size)) == FR_OK)
-        {
-            hcodec->in_buf[i].full = 1;
-        }
-        else
-        {
-            return JPEG_CODEC_READ_ERROR;
-        }
+        hcodec->in_buf[i].full = hcodec->in_buf[i].size = 0;
+        hcodec->out_buf[i].full = hcodec->out_buf[i].size = 0;
     }
+
+    hcodec->state = JPEG_CODEC_STATE_IDLE;
+
+    /* Read from JPG file and fill input buffers */
+	if(hcodec->in_buf[1].ptr == NULL) /* User jpeg source buffer */
+	{		
+		if(f_read (hcodec->fp,
+                   hcodec->in_buf[0].ptr,
+                   src_size,
+                   (UINT *) &hcodec->in_buf[0].size) == FR_OK)
+		{
+			hcodec->in_buf[0].full = 1;
+		}
+		else
+		{
+			return JPEG_CODEC_READ_ERROR;
+		}
+	}
+	else /* Internal jpeg source buffer */
+	{
+		for(i = 0; i < 2; i++)
+		{
+			if(f_read (hcodec->fp,
+                       hcodec->in_buf[i].ptr,
+                       JPEG_CODEC_SIZE_IN,
+                       (UINT *) &hcodec->in_buf[i].size) == FR_OK)
+			{
+				hcodec->in_buf[i].full = 1;
+			}
+			else
+			{
+				return JPEG_CODEC_READ_ERROR;
+			}
+		}
+	}
 
     /* Start JPEG decoding with DMA method */
     HAL_JPEG_Decode_DMA(hcodec->hjpeg,
@@ -97,12 +132,13 @@ jpeg_codec_err_t jpeg_decoder_io(jpeg_codec_handle_t * hcodec)
 {
     uint32_t data_converted;
 
-    if(hcodec->in_buf[hcodec->in_write_idx].full == 0)
+    if(hcodec->in_buf[hcodec->in_write_idx].full == 0 && \
+       hjpegcodec->in_buf[1].ptr != NULL)
     {
-        if(f_read (hcodec->fp, 
-                   hcodec->in_buf[hcodec->in_write_idx].ptr, 
-                   JPEG_CODEC_SIZE_IN, 
-                   (UINT *)(&hcodec->in_buf[hcodec->in_write_idx].size)) == FR_OK)
+        if(f_read (hcodec->fp,
+                   hcodec->in_buf[hcodec->in_write_idx].ptr,
+                   JPEG_CODEC_SIZE_IN,
+                   (UINT *) &hcodec->in_buf[hcodec->in_write_idx].size) == FR_OK)
         {
             hcodec->in_buf[hcodec->in_write_idx].full = 1;
         }
@@ -160,15 +196,6 @@ jpeg_codec_err_t jpeg_decoder_io(jpeg_codec_handle_t * hcodec)
     return JPEG_CODEC_NO_ERROR;
 }
 
-void jpeg_decoder_free(jpeg_codec_handle_t * hcodec)
-{
-    uint8_t * ptr = hcodec->in_buf[0].ptr;
-
-    free(ptr);
-    hcodec->in_buf[0].ptr = hcodec->in_buf[1].ptr = NULL;
-    hcodec->out_buf[0].ptr = hcodec->out_buf[1].ptr = NULL;   
-}
-
 void HAL_JPEG_InfoReadyCallback(JPEG_HandleTypeDef * hjpeg, JPEG_ConfTypeDef * pInfo)
 {
 	JPEG_GetDecodeColorConvertFunc(pInfo, &(hjpegcodec->color_fn), &(hjpegcodec->mcu_total));
@@ -183,11 +210,14 @@ void HAL_JPEG_GetDataCallback(JPEG_HandleTypeDef * hjpeg, uint32_t NbDecodedData
 		hjpegcodec->in_buf[hjpegcodec->in_read_idx].full = 0;
 		hjpegcodec->in_buf[hjpegcodec->in_read_idx].size = 0;
 
-		hjpegcodec->in_read_idx++;
-		if(hjpegcodec->in_read_idx >= 2)
-		{
-			hjpegcodec->in_read_idx = 0;
-		}
+		if(hjpegcodec->in_buf[1].ptr != NULL) /* Internal jpeg source buffer */
+        {
+            hjpegcodec->in_read_idx++;
+            if(hjpegcodec->in_read_idx >= 2)
+            {
+                hjpegcodec->in_read_idx = 0;
+            }
+        }
 
 		if(hjpegcodec->in_buf[hjpegcodec->in_read_idx].full == 0)
 		{

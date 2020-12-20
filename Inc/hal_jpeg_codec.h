@@ -85,10 +85,9 @@ typedef struct
 /* Exported macro ------------------------------------------------------------*/
 /* Exported variables --------------------------------------------------------*/
 /* Exported functions --------------------------------------------------------*/
-jpeg_codec_err_t 	jpeg_decoder_init(jpeg_codec_handle_t * hcodec, JPEG_HandleTypeDef * hjpeg, FIL * fp, uint32_t dst_addr);
-jpeg_codec_err_t 	jpeg_decoder_start(jpeg_codec_handle_t * hcodec);
+jpeg_codec_err_t 	jpeg_decoder_init(jpeg_codec_handle_t * hcodec, JPEG_HandleTypeDef * hjpeg, FIL * fp, uint8_t * src_addr, uint8_t * dst_addr);
+jpeg_codec_err_t 	jpeg_decoder_start(jpeg_codec_handle_t * hcodec, uint32_t src_size);
 jpeg_codec_err_t 	jpeg_decoder_io(jpeg_codec_handle_t * hcodec);
-void 				jpeg_decoder_free(jpeg_codec_handle_t * hcodec);
 
 #ifdef __cplusplus
 }

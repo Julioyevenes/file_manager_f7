@@ -33,8 +33,6 @@
 #include "usbh_core.h"
 #include "usbh_hid.h"
 
-#include "hal_jpeg_codec.h"
-
 /* Private types ------------------------------------------------------------*/
 /* Private constants --------------------------------------------------------*/
 #define LVGL_JPEG_INFO_TIMEOUT 	500
@@ -67,10 +65,10 @@ static volatile const lv_color_t *	buf_to_flush;
 
 static uint8_t * 					lvgl_img_addr;
 static FIL 							lvgl_img_fh;
-static JPEG_HandleTypeDef 			lvgl_img_hjpeg;
 static JPEG_ConfTypeDef   			lvgl_img_jpeginfo;
 static jpeg_codec_handle_t 			lvgl_img_hjpegcodec;
 
+JPEG_HandleTypeDef          lvgl_img_hjpeg;
 USBH_HandleTypeDef 			hUSBH;
 USBH_HandleTypeDef * 		pusb_hid = NULL;
 HID_MOUSE_Info_TypeDef * 	m_pinfo;
@@ -367,10 +365,11 @@ static lv_res_t lvgl_img_decoder_info_cb(struct _lv_img_decoder * decoder, const
                 jpeg_decoder_init(&lvgl_img_hjpegcodec,
                                   &lvgl_img_hjpeg,
                                   &lvgl_img_fh,
-                                  (uint32_t) lvgl_img_addr);
+								  0,
+                                  lvgl_img_addr);
 
                 /* JPEG decoding with DMA */
-                jpeg_decoder_start(&lvgl_img_hjpegcodec);
+                jpeg_decoder_start(&lvgl_img_hjpegcodec, 0);
 
                 /* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
                 uint32_t timeout = HAL_GetTick();
@@ -390,9 +389,6 @@ static lv_res_t lvgl_img_decoder_info_cb(struct _lv_img_decoder * decoder, const
                 header->cf = LV_IMG_CF_TRUE_COLOR;
                 header->w = lvgl_img_jpeginfo.ImageWidth;
                 header->h = lvgl_img_jpeginfo.ImageHeight;
-
-                /* Free JPEG decoder resources */
-                jpeg_decoder_free(&lvgl_img_hjpegcodec);
 
                 /* Close the JPEG file */
                 f_close(&lvgl_img_fh);
@@ -431,10 +427,11 @@ static lv_res_t lvgl_img_decoder_open_cb(lv_img_decoder_t * decoder, lv_img_deco
                 jpeg_decoder_init(&lvgl_img_hjpegcodec,
                                   &lvgl_img_hjpeg,
                                   &lvgl_img_fh,
-                                  (uint32_t) lvgl_img_addr);
+								  0,
+                                  lvgl_img_addr);
 
                 /* JPEG decoding with DMA */
-                jpeg_decoder_start(&lvgl_img_hjpegcodec);
+                jpeg_decoder_start(&lvgl_img_hjpegcodec, 0);
 
                 /* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
                 uint32_t timeout = HAL_GetTick();
@@ -452,9 +449,6 @@ static lv_res_t lvgl_img_decoder_open_cb(lv_img_decoder_t * decoder, lv_img_deco
                 }
 
 				dsc->img_data = (uint8_t *) lvgl_img_addr;
-
-                /* Free JPEG decoder resources */
-                jpeg_decoder_free(&lvgl_img_hjpegcodec);
 
                 /* Close the JPEG file */
                 f_close(&lvgl_img_fh);
@@ -574,4 +568,32 @@ void LVGL_DMA_STREAM_IRQHANDLER(void)
 {
     /* Check the interrupt and clear flag */
     HAL_DMA_IRQHandler(&lvgl_hdma);
+}
+
+/**
+  * @brief  Initialize the BSP LCD Msp.
+  */
+void BSP_LCD_MspInit(void)
+{
+  /** @brief Enable the LTDC clock */
+  __HAL_RCC_LTDC_CLK_ENABLE();
+
+  /** @brief Toggle Sw reset of LTDC IP */
+  __HAL_RCC_LTDC_FORCE_RESET();
+  __HAL_RCC_LTDC_RELEASE_RESET();
+
+  /** @brief Enable DSI Host and wrapper clocks */
+  __HAL_RCC_DSI_CLK_ENABLE();
+
+  /** @brief Soft Reset the DSI Host and wrapper */
+  __HAL_RCC_DSI_FORCE_RESET();
+  __HAL_RCC_DSI_RELEASE_RESET();
+
+  /** @brief NVIC configuration for LTDC interrupt that is now enabled */
+  HAL_NVIC_SetPriority(LTDC_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(LTDC_IRQn);
+
+  /** @brief NVIC configuration for DSI interrupt that is now enabled */
+  HAL_NVIC_SetPriority(DSI_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(DSI_IRQn);
 }
