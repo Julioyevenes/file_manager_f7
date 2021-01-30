@@ -38,30 +38,9 @@
 #define LVGL_JPEG_INFO_TIMEOUT 	500
 #define LVGL_JPEG_IMG_TIMEOUT 	5000
 
-/* DMA Stream parameters definitions. You can modify these parameters to select
-   a different DMA Stream and/or channel.
-   But note that only DMA2 Streams are capable of Memory to Memory transfers. */
-#define LVGL_DMA_STREAM               DMA2_Stream7
-#define LVGL_DMA_CHANNEL              DMA_CHANNEL_0
-#define LVGL_DMA_STREAM_IRQ           DMA2_Stream7_IRQn
-#define LVGL_DMA_STREAM_IRQHANDLER    DMA2_Stream7_IRQHandler
-
 /* Private macro ------------------------------------------------------------*/
 /* Private variables --------------------------------------------------------*/
-#if LV_COLOR_DEPTH == 16
-static uint16_t * my_fb = (uint16_t *)LCD_FB_START_ADDRESS;
-#else
-static uint32_t * my_fb = (uint32_t *)LCD_FB_START_ADDRESS;
-#endif
-
-static DMA_HandleTypeDef     		lvgl_hdma;
 static lv_disp_drv_t 				disp_drv;
-static volatile int32_t 			x1_flush;
-static volatile int32_t 			y1_flush;
-static volatile int32_t 			x2_flush;
-static volatile int32_t 			y2_flush;
-static volatile int32_t 			y_flush_act;
-static volatile const lv_color_t *	buf_to_flush;
 
 static uint8_t * 					lvgl_img_addr;
 static FIL 							lvgl_img_fh;
@@ -84,12 +63,9 @@ static lv_res_t lvgl_img_decoder_info_cb(struct _lv_img_decoder * decoder, const
 static lv_res_t lvgl_img_decoder_open_cb(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * dsc);
 static void 	lvgl_img_decoder_close_cb(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * dsc);
 
-static void DMA_Config(void);
-static void DMA_TransferComplete(DMA_HandleTypeDef *han);
-static void DMA_TransferError(DMA_HandleTypeDef *han);
-
 void lvgl_disp_init(void)
 {
+	uint32_t offset;
     /** 
       * Initialize your display
       */
@@ -98,17 +74,15 @@ void lvgl_disp_init(void)
     BSP_LCD_SelectLayer(0);
 
     /** 
-      * Initialize dma
-      */
-	DMA_Config();
-	  
-    /** 
       * Create a buffer for drawing
       */
     static lv_disp_buf_t disp_buf;
-    static lv_color_t buf00[LV_HOR_RES_MAX * 48];                      /* A buffer for 48 rows */
-    static lv_color_t buf01[LV_HOR_RES_MAX * 48];                      /* A buffer for 48 rows */
-    lv_disp_buf_init(&disp_buf, buf00, buf01, LV_HOR_RES_MAX * 48);   /* Initialize the display buffer */
+
+    offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * sizeof(lv_color_t);
+    lv_disp_buf_init(&disp_buf,
+                     (lv_color_t *) LCD_FB_START_ADDRESS,
+                     (lv_color_t *) (LCD_FB_START_ADDRESS + offset),
+                     BSP_LCD_GetXSize() * BSP_LCD_GetYSize());   /* Initialize the display buffer */
 
     /** 
       * Register the display in LittlevGL
@@ -189,11 +163,7 @@ void lvgl_img_decoder_init(void)
     HAL_JPEG_Init(&lvgl_img_hjpeg);
 
     /* Set image raw data address */
-#if LV_COLOR_DEPTH == 16
-    offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * 2;
-#else
-    offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * 4;
-#endif
+	offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * sizeof(lv_color_t) * 2;
     lvgl_img_addr = (uint8_t *) (LCD_FB_START_ADDRESS + offset);
 
     lv_img_decoder_t * dec = lv_img_decoder_create();
@@ -204,29 +174,11 @@ void lvgl_img_decoder_init(void)
 
 static void lvgl_disp_write_cb(lv_disp_drv_t* disp_drv, const lv_area_t* area, lv_color_t* color_p)
 {
-	/*Truncate the area to the screen*/
-	int32_t act_x1 = area->x1 < 0 ? 0 : area->x1;
-	int32_t act_y1 = area->y1 < 0 ? 0 : area->y1;
-	int32_t act_x2 = area->x2 > disp_drv->hor_res - 1 ? disp_drv->hor_res - 1 : area->x2;
-	int32_t act_y2 = area->y2 > disp_drv->ver_res - 1 ? disp_drv->ver_res - 1 : area->y2;
+	/* Change display buffer address */
+	BSP_LCD_SetLayerAddress(0, (uint32_t) disp_drv->buffer->buf_act);
 
-	x1_flush = act_x1;
-	y1_flush = act_y1;
-	x2_flush = act_x2;
-	y2_flush = act_y2;
-	y_flush_act = act_y1;
-	buf_to_flush = color_p;
-
-	/*Use DMA instead of DMA2D to leave it free for GPU*/
-	HAL_StatusTypeDef err;
-	err = HAL_DMA_Start_IT(&lvgl_hdma,
-						   (uint32_t)buf_to_flush,
-						   (uint32_t)&my_fb[y_flush_act * disp_drv->hor_res + x1_flush],
-			               (x2_flush - x1_flush + 1));
-	if(err != HAL_OK)
-	{
-		while(1);	/*Halt on error*/
-	}
+	/* Inform the graphics library that you are ready with the flushing */
+	lv_disp_flush_ready(disp_drv);
 }
 
 static bool lvgl_ts_read_cb(lv_indev_drv_t *indev, lv_indev_data_t *data)
@@ -463,111 +415,6 @@ static lv_res_t lvgl_img_decoder_open_cb(lv_img_decoder_t * decoder, lv_img_deco
 
 static void lvgl_img_decoder_close_cb(lv_img_decoder_t * decoder, lv_img_decoder_dsc_t * dsc)
 {
-}
-
-/**
-  * @brief  Configure the DMA controller according to the Stream parameters
-  *         defined in main.h file
-  * @note  This function is used to :
-  *        -1- Enable DMA2 clock
-  *        -2- Select the DMA functional Parameters
-  *        -3- Select the DMA instance to be used for the transfer
-  *        -4- Select Callbacks functions called after Transfer complete and
-               Transfer error interrupt detection
-  *        -5- Initialize the DMA stream
-  *        -6- Configure NVIC for DMA transfer complete/error interrupts
-  * @param  None
-  * @retval None
-  */
-static void DMA_Config(void)
-{
-  /* Enable DMA2 clock */
-  __HAL_RCC_DMA2_CLK_ENABLE();
-
-  /* Select the DMA functional Parameters */
-  lvgl_hdma.Init.Channel = LVGL_DMA_CHANNEL;                     /* DMA_CHANNEL_0                    */
-  lvgl_hdma.Init.Direction = DMA_MEMORY_TO_MEMORY;          /* M2M transfer mode                */
-  lvgl_hdma.Init.PeriphInc = DMA_PINC_ENABLE;               /* Peripheral increment mode Enable */
-  lvgl_hdma.Init.MemInc = DMA_MINC_ENABLE;                  /* Memory increment mode Enable     */
-#if LV_COLOR_DEPTH == 16
-  lvgl_hdma.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD; /* Peripheral data alignment : 16bit */
-  lvgl_hdma.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;    /* memory data alignment : 16bit     */
-#else
-  lvgl_hdma.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD; /* Peripheral data alignment : 16bit */
-  lvgl_hdma.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;    /* memory data alignment : 16bit     */
-#endif
-  lvgl_hdma.Init.Mode = DMA_NORMAL;                         /* Normal DMA mode                  */
-  lvgl_hdma.Init.Priority = DMA_PRIORITY_HIGH;              /* priority level : high            */
-  lvgl_hdma.Init.FIFOMode = DMA_FIFOMODE_ENABLE;            /* FIFO mode enabled                */
-  lvgl_hdma.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL; /* FIFO threshold: 1/4 full   */
-  lvgl_hdma.Init.MemBurst = DMA_MBURST_SINGLE;              /* Memory burst                     */
-  lvgl_hdma.Init.PeriphBurst = DMA_PBURST_SINGLE;           /* Peripheral burst                 */
-
-  /* Select the DMA instance to be used for the transfer : DMA2_Stream7 */
-  lvgl_hdma.Instance = LVGL_DMA_STREAM;
-
-  /* Initialize the DMA stream */
-  if(HAL_DMA_Init(&lvgl_hdma) != HAL_OK)
-  {
-    while(1);
-  }
-
-  /* Select Callbacks functions called after Transfer complete and Transfer error */
-  HAL_DMA_RegisterCallback(&lvgl_hdma, HAL_DMA_XFER_CPLT_CB_ID, DMA_TransferComplete);
-  HAL_DMA_RegisterCallback(&lvgl_hdma, HAL_DMA_XFER_ERROR_CB_ID, DMA_TransferError);
-
-  /* Configure NVIC for DMA transfer complete/error interrupts */
-  HAL_NVIC_SetPriority(LVGL_DMA_STREAM_IRQ, 0, 0);
-  HAL_NVIC_EnableIRQ(LVGL_DMA_STREAM_IRQ);
-}
-
-/**
-  * @brief  DMA conversion complete callback
-  * @note   This function is executed when the transfer complete interrupt
-  *         is generated
-  * @retval None
-  */
-static void DMA_TransferComplete(DMA_HandleTypeDef *hdma)
-{
-	y_flush_act ++;
-
-	if(y_flush_act > y2_flush) {
-	  lv_disp_flush_ready(&disp_drv);
-	} else {
-	  buf_to_flush += x2_flush - x1_flush + 1;
-	  /* Start the DMA transfer using the interrupt mode */
-	  /* Configure the source, destination and buffer size DMA fields and Start DMA Stream transfer */
-	  /* Enable All the DMA interrupts */
-	  if(HAL_DMA_Start_IT(hdma,
-						  (uint32_t)buf_to_flush, 
-						  (uint32_t)&my_fb[y_flush_act * disp_drv.hor_res + x1_flush],
-						  (x2_flush - x1_flush + 1)) != HAL_OK)
-	  {
-	    while(1);	/*Halt on error*/
-	  }
-	}
-}
-
-/**
-  * @brief  DMA conversion error callback
-  * @note   This function is executed when the transfer error interrupt
-  *         is generated during DMA transfer
-  * @retval None
-  */
-static void DMA_TransferError(DMA_HandleTypeDef *hdma)
-{
-    while(1);
-}
-
-/**
-  * @brief  This function handles DMA Stream interrupt request.
-  * @param  None
-  * @retval None
-  */
-void LVGL_DMA_STREAM_IRQHANDLER(void)
-{
-    /* Check the interrupt and clear flag */
-    HAL_DMA_IRQHandler(&lvgl_hdma);
 }
 
 /**

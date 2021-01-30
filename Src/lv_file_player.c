@@ -92,11 +92,7 @@ audio_lib_err_t lv_fm_player_start(lv_obj_t * parent, lv_fm_player_format_t form
 	player_format = format;
 
     /* Set image raw data address */
-#if LV_COLOR_DEPTH == 16
-    offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * 2;
-#else
-    offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * 4;
-#endif
+	offset = BSP_LCD_GetXSize() * BSP_LCD_GetYSize() * sizeof(lv_color_t) * 2;
     hlib.img.ptr = (uint8_t *) (LCD_FB_START_ADDRESS + offset);
     hlib.img.codec = &lvgl_img_hjpeg;
 	
@@ -163,11 +159,7 @@ static void lv_fm_player_create(lv_obj_t * parent)
         img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR;
         img_dsc.header.w = hlib.img.width;
         img_dsc.header.h = hlib.img.height;
-#if LV_COLOR_DEPTH == 16
-        img_dsc.data_size = hlib.img.width * hlib.img.height * 2;
-#else
-        img_dsc.data_size = hlib.img.width * hlib.img.height * 4;
-#endif
+        img_dsc.data_size = hlib.img.width * hlib.img.height * sizeof(lv_color_t);
         img_dsc.data = hlib.img.ptr;
         lv_img_set_src(player_img, &img_dsc);
         lv_obj_set_drag(player_img, true);
